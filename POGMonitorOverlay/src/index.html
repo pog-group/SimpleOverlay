@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Hello World!</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      .video {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <video id="overlay2" class="hidden"></video>
+    <div id="overlay1" class="hidden"></div>
+
+    <script>
+        /***************************/
+        /*         GENERAL         */
+        /***************************/
+
+        window.addEventListener('DOMContentLoaded', async () => {
+
+            const OVERLAY = 2
+
+
+            // DO NOT TOUCH
+            if (OVERLAY === 1) {
+                _overlay1()
+                document.querySelector('#overlay1').classList.remove('hidden')
+            } else if (OVERLAY === 2) {
+                _overlay2()
+                document.querySelector('#overlay2').classList.remove('hidden')
+            } else {
+                console.error('No overlay selected')
+            }
+        })
+        
+    </script>
+
+
+    <script>
+        /***************************/
+        /*        OVERLAY1        */
+        /***************************/
+
+        function _overlay1() {
+            document.location.href = "http://127.0.0.1:4000/ingame"
+        }
+
+    </script>
+
+
+    <script>
+            
+        /***************************/
+        /*        OVERLAY2        */
+        /***************************/
+
+
+function _overlay2() {
+        
+    console.log('👋 This message is being logged by "renderer.js", included via webpack');
+
+    let mediaRecorder;
+    let recordedChunks = [];
+
+    // Buttons
+    const videoElement = document.querySelector('#overlay2');
+
+    /*
+    const startBtn = document.getElementById('startBtn');
+    startBtn.onclick = e => {
+    startRecording();
+    startBtn.innerText = 'Recording';
+    };
+
+    const stopBtn = document.getElementById('stopBtn');
+
+    stopBtn.onclick = e => {
+    mediaRecorder.stop();
+    startBtn.innerText = 'Start';
+    };
+
+    const videoSelectBtn = document.getElementById('videoSelectBtn');
+    videoSelectBtn.onclick = getVideoSources;
+
+    const selectMenu = document.getElementById('selectMenu') as any
+    */
+
+
+    const selectMenu = null;
+
+    setTimeout(async () => {
+        await getVideoSources()
+        await startRecording()
+    }, 100)
+
+    async function getVideoSources() {
+        const inputSources = await window.electron.getSources()
+    
+        inputSources.forEach((source) => {
+        const element = document.createElement("option")
+        element.value = source.id
+        element.innerHTML = source.name
+        selectMenu?.appendChild(element)
+        });
+    }
+
+
+    async function startRecording() {
+        let screenId = selectMenu ? selectMenu?.options[selectMenu?.selectedIndex].value : null
+        screenId = "screen:1:0"
+        
+
+        console.log("screenId", screenId)
+
+
+        const constraints = {
+        audio: false,
+        video: {
+            mandatory: {
+            chromeMediaSource: 'desktop',
+            chromeMediaSourceId: screenId
+            }
+        }
+        };
+    
+        // Create a Stream
+        const stream = await navigator.mediaDevices
+        .getUserMedia(constraints);
+    
+        // Preview the source in a video element
+        videoElement.srcObject = stream;
+        await videoElement.play();
+    
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9', videoBitsPerSecond: 2500000 });
+        stream.getVideoTracks()[0].applyConstraints({ frameRate: 60 });
+        mediaRecorder.ondataavailable = onDataAvailable;
+        mediaRecorder.onstop = stopRecording;
+        mediaRecorder.start();
+    }
+
+    function onDataAvailable(e) {
+        recordedChunks.push(e.data);
+    }
+
+
+    async function stopRecording() {
+        videoElement.srcObject = null
+
+        const blob = new Blob(recordedChunks, {
+        type: 'video/webm; codecs=vp9'
+        });
+    
+        const buffer = Buffer.from(await blob.arrayBuffer());
+        recordedChunks = []
+
+        const { canceled, filePath } =  await ipcRenderer.invoke('showSaveDialog')
+        if(canceled) return
+    
+        if (filePath) {
+        //writeFile(filePath, buffer, () => console.log('video saved successfully!'));
+        }
+    }
+}
+    </script>
+
+
+  </body>
+</html>
