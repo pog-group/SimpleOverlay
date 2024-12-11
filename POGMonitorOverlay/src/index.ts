@@ -30,12 +30,17 @@ const createWindow = (): void => {
     },
   });
 
-  ipcMain.on('mouse-events-disable', (event, value) => {
-    mainWindow.setIgnoreMouseEvents(true, { forward: true });
-  })
-  ipcMain.on('mouse-events-enable', (event, value) => {
-    mainWindow.setIgnoreMouseEvents(false);
-  })
+  function toggleMouseEvent(value: boolean) {
+    if (value === false) {
+      mainWindow.setIgnoreMouseEvents(true, { forward: true });
+    } else {
+      mainWindow.setIgnoreMouseEvents(false);
+    }
+  }
+
+  ipcMain.on('mouse-events-disable', (event) => { toggleMouseEvent(false); })
+  ipcMain.on('mouse-events-enable', (event) => {  toggleMouseEvent(true); })
+  
 
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);

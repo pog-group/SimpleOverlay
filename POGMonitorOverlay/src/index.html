@@ -35,7 +35,7 @@
 
         window.addEventListener('DOMContentLoaded', async () => {
 
-            const OVERLAY = 2
+            const OVERLAY = 1
 
 
             // DO NOT TOUCH
@@ -60,6 +60,7 @@
 
         function _overlay1() {
             document.location.href = "http://127.0.0.1:4000/ingame"
+            window.electron.toggleMouseEvent(false)
         }
 
     </script>
