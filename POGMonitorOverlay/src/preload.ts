@@ -17,11 +17,12 @@ contextBridge.exposeInMainWorld('electron', {
         return await ipcRenderer.invoke('getOperatingSystem');
     },
     toggleMouseEvent: async (value: boolean) => {
-        if (value) {
+        if (value == true) {
             ipcRenderer.send('mouse-events-enable');
         } else {
             ipcRenderer.send('mouse-events-disable');
         }
-    }
+    },
+    onToggleDisplay: (callback:any) => ipcRenderer.on('toggle_display', (_, action) => callback(action)),
+    onFightMode: (callback:any) => ipcRenderer.on('fightMode', (_, action) => callback(action)),
 });
-

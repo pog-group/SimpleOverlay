@@ -8,6 +8,11 @@ declare global {
 }
 
 
+setInterval(() => {
+  console.log("Hello from renderer.ts")
+}, 10)
+
+
 /*
 
 
@@ -116,3 +121,5 @@ async function stopRecording() {
 }
 
 */
+
+
