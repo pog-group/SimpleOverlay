@@ -23,6 +23,6 @@ contextBridge.exposeInMainWorld('electron', {
             ipcRenderer.send('mouse-events-disable');
         }
     },
-    onToggleDisplay: (callback:any) => ipcRenderer.on('toggle_display', (_, action) => callback(action)),
-    onFightMode: (callback:any) => ipcRenderer.on('fightMode', (_, action) => callback(action)),
+    onToggleDisplay: (callback:any) => ipcRenderer.on('toggle_display', (_:any, action:any) => callback(action)),
+    onFightMode: (callback:any) => ipcRenderer.on('fightMode', (_:any, action:any) => callback(action)),
 });
