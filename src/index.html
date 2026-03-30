@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';" />
+  <title>Simple Overlay</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 16px;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    h1 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+    }
+
+    label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #888;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    input[type="text"], select {
+      width: 100%;
+      padding: 7px 10px;
+      background: #16213e;
+      border: 1px solid #2a2a4a;
+      border-radius: 6px;
+      color: #e0e0e0;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input[type="text"]:focus, select:focus {
+      border-color: #4a90d9;
+    }
+
+    select option { background: #16213e; }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .row input { flex: 1; }
+
+    button {
+      padding: 7px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: background 0.15s, transform 0.08s;
+      white-space: nowrap;
+    }
+
+    button:active { transform: scale(0.97); }
+
+    .btn-primary { background: #4a90d9; color: #fff; }
+    .btn-primary:hover { background: #357abd; }
+
+    .btn-toggle {
+      padding: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 8px;
+      background: #27ae60;
+      color: #fff;
+    }
+    .btn-toggle.active { background: #c0392b; }
+    .btn-toggle:hover { filter: brightness(1.1); }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid #2a2a4a;
+      color: #aaa;
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+    .btn-ghost:hover { background: #2a2a4a; color: #fff; }
+
+    .section {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-height: 0;
+    }
+
+    .section.grow { flex: 1; }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .divider {
+      height: 1px;
+      background: #2a2a4a;
+      flex-shrink: 0;
+    }
+
+    /* ── Lists ── */
+    .list-box {
+      background: #12192e;
+      border: 1px solid #2a2a4a;
+      border-radius: 8px;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .list-box::-webkit-scrollbar { width: 4px; }
+    .list-box::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 2px; }
+
+    .empty {
+      padding: 20px;
+      text-align: center;
+      color: #3a3a5a;
+      font-size: 12px;
+    }
+
+    /* Saved cards */
+    .saved-card {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-bottom: 1px solid #1a1a38;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .saved-card:last-child { border-bottom: none; }
+    .saved-card:hover { background: #1a2540; }
+    .saved-card:hover .card-remove { opacity: 1; }
+
+    .card-url {
+      flex: 1;
+      font-size: 11px;
+      color: #b0b8d0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-remove {
+      opacity: 0;
+      transition: opacity 0.15s;
+      background: transparent;
+      border: none;
+      color: #c0392b;
+      font-size: 12px;
+      padding: 1px 3px;
+      cursor: pointer;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .card-remove:hover { color: #e74c3c; }
+
+    /* History rows */
+    .hist-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-bottom: 1px solid #1a1a38;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .hist-item:last-child { border-bottom: none; }
+    .hist-item:hover { background: #1a2540; }
+
+    .hist-index {
+      font-size: 10px;
+      color: #3a4060;
+      width: 12px;
+      text-align: right;
+      flex-shrink: 0;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .hist-url {
+      flex: 1;
+      font-size: 11px;
+      color: #8090b0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  </style>
+</head>
+<body>
+  <h1>Simple Overlay</h1>
+
+  <!-- URL Input -->
+  <div class="section" style="flex-shrink:0">
+    <label>URL</label>
+    <div class="row">
+      <input type="text" id="urlInput" placeholder="https://example.com" />
+      <button class="btn-ghost" id="saveBtn" title="Save to list">★</button>
+      <button class="btn-primary" id="loadBtn">Load</button>
+    </div>
+  </div>
+
+  <!-- Monitor Select -->
+  <div class="section" style="flex-shrink:0">
+    <label>Display</label>
+    <select id="displaySelect"></select>
+  </div>
+
+  <!-- Toggle + Reload -->
+  <div class="row" style="flex-shrink:0">
+    <button class="btn-toggle" id="toggleBtn" style="flex:3">Show Overlay</button>
+    <button class="btn-ghost" id="reloadBtn" style="flex:1">↺ Reload</button>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Saved URLs -->
+  <div class="section grow">
+    <div class="section-header">
+      <label style="margin:0">Saved</label>
+    </div>
+    <div class="list-box" id="savedList">
+      <div class="empty">No saved URLs</div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="section grow">
+    <div class="section-header">
+      <label style="margin:0">History</label>
+      <button class="btn-ghost" id="clearHistBtn">Clear</button>
+    </div>
+    <div class="list-box" id="historyList">
+      <div class="empty">No history</div>
+    </div>
+  </div>
+
+  <script>
+    const urlInput = document.getElementById('urlInput');
+    const displaySelect = document.getElementById('displaySelect');
+    const toggleBtn = document.getElementById('toggleBtn');
+    const reloadBtn = document.getElementById('reloadBtn');
+    const loadBtn = document.getElementById('loadBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const savedList = document.getElementById('savedList');
+    const historyList = document.getElementById('historyList');
+    const clearHistBtn = document.getElementById('clearHistBtn');
+
+    let overlayOn = false;
+
+    function getDisplayIndex() {
+      return parseInt(displaySelect.value) || 0;
+    }
+
+    function renderSaved(items) {
+      if (!items || items.length === 0) {
+        savedList.innerHTML = '<div class="empty">No saved URLs</div>';
+        return;
+      }
+      savedList.innerHTML = '';
+      items.forEach(url => {
+        const card = document.createElement('div');
+        card.className = 'saved-card';
+
+        const urlEl = document.createElement('div');
+        urlEl.className = 'card-url';
+        urlEl.textContent = url;
+        urlEl.title = url;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'card-remove';
+        removeBtn.textContent = '✕';
+        removeBtn.title = 'Remove';
+        removeBtn.onclick = (e) => { e.stopPropagation(); window.api.removeSaved(url); };
+
+        card.appendChild(urlEl);
+        card.appendChild(removeBtn);
+        card.onclick = () => loadUrl(url);
+
+        savedList.appendChild(card);
+      });
+    }
+
+    function renderHistory(items) {
+      if (!items || items.length === 0) {
+        historyList.innerHTML = '<div class="empty">No history</div>';
+        return;
+      }
+      historyList.innerHTML = '';
+      items.forEach((url, i) => {
+        const row = document.createElement('div');
+        row.className = 'hist-item';
+
+        const idx = document.createElement('div');
+        idx.className = 'hist-index';
+        idx.textContent = i + 1;
+
+        const urlEl = document.createElement('div');
+        urlEl.className = 'hist-url';
+        urlEl.textContent = url;
+        urlEl.title = url;
+
+        row.appendChild(idx);
+        row.appendChild(urlEl);
+        row.onclick = () => loadUrl(url);
+
+        historyList.appendChild(row);
+      });
+    }
+
+    function loadUrl(url) {
+      urlInput.value = url;
+      window.api.setUrl(url, getDisplayIndex(), true);
+    }
+
+    function applyStore(store) {
+      renderSaved(store.saved);
+      renderHistory(store.history);
+      if (store.selectedMonitor !== undefined) {
+        displaySelect.value = store.selectedMonitor;
+      }
+    }
+
+    function setOverlayState(visible) {
+      overlayOn = visible;
+      toggleBtn.textContent = visible ? 'Hide Overlay' : 'Show Overlay';
+      toggleBtn.classList.toggle('active', visible);
+    }
+
+    async function init() {
+      const displays = await window.api.getDisplays();
+      displaySelect.innerHTML = '';
+      displays.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        opt.textContent = d.isPrimary ? d.label + ' (Primary)' : d.label;
+        displaySelect.appendChild(opt);
+      });
+
+      const store = await window.api.getStore();
+      applyStore(store);
+
+      window.api.onStoreUpdated(applyStore);
+      window.api.onOverlayState(setOverlayState);
+    }
+
+    reloadBtn.onclick = () => window.api.reloadOverlay();
+
+    toggleBtn.onclick = () => {
+      if (overlayOn) window.api.hideOverlay();
+      else window.api.showOverlay();
+    };
+
+    loadBtn.onclick = () => {
+      const url = urlInput.value.trim();
+      if (!url) { urlInput.focus(); return; }
+      window.api.setUrl(url, getDisplayIndex(), true);
+    };
+
+    saveBtn.onclick = () => {
+      const url = urlInput.value.trim();
+      if (url) window.api.saveUrl(url);
+    };
+
+    displaySelect.onchange = () => window.api.moveOverlay(getDisplayIndex());
+
+    clearHistBtn.onclick = () => window.api.clearHistory();
+
+    init();
+  </script>
+</body>
+</html>

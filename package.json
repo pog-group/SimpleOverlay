@@ -1,14 +1,39 @@
 {
-  "name": "pog-monitoroverlay",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "simple-overlay",
+  "productName": "Simple Overlay",
+  "version": "26.0.0",
+  "description": "A fullscreen transparent overlay that displays a selected URL",
+  "main": "src/main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "electron .",
+    "build": "electron-builder --win",
+    "build:dir": "electron-builder --win --dir"
   },
-  "author": "",
-  "license": "ISC",
+  "build": {
+    "appId": "com.pog.simpleoverlay",
+    "productName": "Simple Overlay",
+    "files": [
+      "src/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    }
+  },
   "devDependencies": {
-    "@electron-forge/cli": "^7.6.0"
-  }
+    "electron": "^41.1.0",
+    "electron-builder": "^26.8.1"
+  },
+  "dependencies": {
+    "electron-squirrel-startup": "^1.0.1"
+  },
+  "keywords": [],
+  "author": {
+    "name": "Spyke",
+    "email": "vidal.quentin@pog-tv.com"
+  },
+  "license": "MIT"
 }
