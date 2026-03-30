@@ -38,19 +38,21 @@ function createOverlayWindow() {
     x, y, width, height,
     frame: false,
     transparent: true,
+    backgroundColor: '#00000000',
     alwaysOnTop: true,
     skipTaskbar: true,
     focusable: false,
     hasShadow: false,
+    show: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
     },
   });
 
+  overlayWindow.setAlwaysOnTop(true, 'screen-saver');
   overlayWindow.setIgnoreMouseEvents(true, { forward: true });
-  overlayWindow.showInactive();
-  overlayWindow.setOpacity(0);
+  overlayWindow.show();
 
   overlayWindow.webContents.on('did-finish-load', () => {
     overlayWindow.webContents.insertCSS('html, body { background: transparent !important; }');
@@ -83,7 +85,7 @@ ipcMain.handle('get-store', () => store);
 ipcMain.handle('get-displays', () => {
   return screen.getAllDisplays().map((d, i) => ({
     id: i,
-    label: `Display ${i + 1} (${d.bounds.width}x${d.bounds.height})`,
+    label: `Display ${i + 1}${d.label ? ` - ${d.label}` : ''} (${d.bounds.width}x${d.bounds.height})`,
     isPrimary: d.id === screen.getPrimaryDisplay().id,
   }));
 });
@@ -96,7 +98,7 @@ function showOverlay() {
 ipcMain.on('show-overlay', showOverlay);
 
 ipcMain.on('hide-overlay', () => {
-  overlayWindow.setOpacity(0);
+  overlayWindow.setOpacity(0)
   mainWindow.webContents.send('overlay-state', false);
 });
 
