@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="19 8 120 120">
+
+  <!-- Icon mark: two offset windows -->
+  <!-- Back window -->
+  <rect x="22" y="26" width="94" height="64" rx="9" fill="none" stroke="#2e4a6e" stroke-width="5"/>
+  <line x1="22" y1="46" x2="116" y2="46" stroke="#2e4a6e" stroke-width="4"/>
+
+  <!-- Front window -->
+  <rect x="42" y="46" width="94" height="64" rx="9" fill="#0f172a" stroke="#4a90d9" stroke-width="5"/>
+  <line x1="42" y1="66" x2="136" y2="66" stroke="#4a90d9" stroke-width="4"/>
+
+</svg>

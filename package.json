@@ -5,6 +5,7 @@
   "description": "A fullscreen transparent overlay that displays a selected URL",
   "main": "src/main.js",
   "scripts": {
+    "generate-icons": "node scripts/generate-icons.js",
     "start": "electron-forge start",
     "make": "electron-forge make --platform win32 --arch x64 && electron-forge make --platform linux --arch x64 && electron-forge make --platform darwin --arch x64",
     "make:win": "electron-forge make --platform win32 --arch x64",
@@ -18,7 +19,9 @@
     "@electron-forge/maker-rpm": "^7.8.0",
     "@electron-forge/maker-squirrel": "^7.8.0",
     "@electron-forge/maker-zip": "^7.8.0",
-    "electron": "^33.0.0"
+    "@resvg/resvg-js": "^2.6.2",
+    "electron": "^33.0.0",
+    "png2icons": "^2.0.1"
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1"

@@ -3,7 +3,8 @@ module.exports = {
     name: 'Simple Overlay',
     executableName: 'simple-overlay',
     asar: true,
-    icon: './src/icons/icon',
+    // electron-packager auto-selects .ico / .icns / .png by platform
+    icon: './assets/icons/icon',
   },
   rebuildConfig: {},
   makers: [

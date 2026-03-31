@@ -1,8 +1,20 @@
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
 if (require('electron-squirrel-startup')) app.quit();
+
+// Pin Windows taskbar icon to this app ID so it always groups correctly
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.pog.simpleoverlay');
+}
+
+function getAppIcon() {
+  const base = path.join(app.getAppPath(), 'assets', 'icons');
+  if (process.platform === 'win32') return path.join(base, 'icon.ico');
+  if (process.platform === 'darwin') return path.join(base, 'icon.icns');
+  return path.join(base, 'icon.png');
+}
 
 const STORE_PATH = path.join(app.getPath('userData'), 'store.json');
 
@@ -66,6 +78,7 @@ function createMainWindow() {
     resizable: false,
     autoHideMenuBar: true,
     title: 'Simple Overlay',
+    icon: getAppIcon(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

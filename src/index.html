@@ -20,12 +20,14 @@
       gap: 12px;
     }
 
-    h1 {
-      font-size: 16px;
-      font-weight: 600;
-      color: #fff;
-      letter-spacing: 0.5px;
+    .app-header {
       flex-shrink: 0;
+    }
+
+    .app-header img {
+      width: 100%;
+      height: auto;
+      display: block;
     }
 
     label {
@@ -211,7 +213,9 @@
   </style>
 </head>
 <body>
-  <h1>Simple Overlay</h1>
+  <div class="app-header">
+    <img src="../assets/icon_banner.svg" alt="Simple Overlay" draggable="false" />
+  </div>
 
   <!-- URL Input -->
   <div class="section" style="flex-shrink:0">
