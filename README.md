@@ -19,4 +19,4 @@ You can download the latest version of the app from the [Releases page](https://
 
 ## License
 
-This software is released under the MIT License. See the [LICENSE file](LICENSE) for details.
+This software is released under the MIT License. See the [LICENSE file](LICENSE.md) for details.
