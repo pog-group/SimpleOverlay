@@ -13,6 +13,7 @@ module.exports = {
       platforms: ['win32'],
       config: {
         name: 'simple_overlay',
+        setupIcon: './assets/icons/icon.ico', 
       },
     },
     {
