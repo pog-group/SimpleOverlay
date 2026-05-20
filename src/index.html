@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';" />
-  <title>Simple Overlay</title>
+  <title></title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -100,6 +100,14 @@
       font-size: 11px;
     }
     .btn-ghost:hover { background: #2a2a4a; color: #fff; }
+
+    .btn-interact {
+      background: #6c3483;
+      color: #fff;
+      font-weight: 600;
+    }
+    .btn-interact.active { background: #922b21; }
+    .btn-interact:hover { filter: brightness(1.15); }
 
     .section {
       display: flex;
@@ -239,6 +247,11 @@
     <button class="btn-ghost" id="reloadBtn" style="flex:1">↺ Reload</button>
   </div>
 
+  <!-- Interact -->
+  <div class="row" style="flex-shrink:0">
+    <button class="btn-interact" id="interactBtn" style="flex:1" disabled>Interact</button>
+  </div>
+
   <div class="divider"></div>
 
   <!-- Saved URLs -->
@@ -272,8 +285,10 @@
     const savedList = document.getElementById('savedList');
     const historyList = document.getElementById('historyList');
     const clearHistBtn = document.getElementById('clearHistBtn');
+    const interactBtn = document.getElementById('interactBtn');
 
     let overlayOn = false;
+    let interacting = false;
 
     function getDisplayIndex() {
       return parseInt(displaySelect.value) || 0;
@@ -352,6 +367,16 @@
       overlayOn = visible;
       toggleBtn.textContent = visible ? 'Hide Overlay' : 'Show Overlay';
       toggleBtn.classList.toggle('active', visible);
+      interactBtn.disabled = !visible;
+      if (!visible && interacting) setInteractState(false);
+    }
+
+    function setInteractState(active) {
+      interacting = active;
+      interactBtn.textContent = active ? 'Stop Interacting' : 'Interact';
+      interactBtn.classList.toggle('active', active);
+      if (active) window.api.interactOverlay();
+      else window.api.stopInteractOverlay();
     }
 
     async function init() {
@@ -369,6 +394,11 @@
 
       window.api.onStoreUpdated(applyStore);
       window.api.onOverlayState(setOverlayState);
+      window.api.onInteractState((active) => {
+        interacting = active;
+        interactBtn.textContent = active ? 'Stop Interacting' : 'Interact';
+        interactBtn.classList.toggle('active', active);
+      });
     }
 
     reloadBtn.onclick = () => window.api.reloadOverlay();
@@ -392,6 +422,8 @@
     displaySelect.onchange = () => window.api.moveOverlay(getDisplayIndex());
 
     clearHistBtn.onclick = () => window.api.clearHistory();
+
+    interactBtn.onclick = () => setInteractState(!interacting);
 
     init();
   </script>

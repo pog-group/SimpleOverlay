@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld('api', {
   saveUrl: (url) => ipcRenderer.send('save-url', url),
   removeSaved: (url) => ipcRenderer.send('remove-saved', url),
   clearHistory: () => ipcRenderer.send('clear-history'),
+  interactOverlay: () => ipcRenderer.send('interact-overlay'),
+  stopInteractOverlay: () => ipcRenderer.send('stop-interact-overlay'),
   onStoreUpdated: (cb) => ipcRenderer.on('store-updated', (_, data) => cb(data)),
   onOverlayState: (cb) => ipcRenderer.on('overlay-state', (_, visible) => cb(visible)),
+  onInteractState: (cb) => ipcRenderer.on('interact-state', (_, active) => cb(active)),
 });

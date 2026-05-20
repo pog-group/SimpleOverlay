@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, screen, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { version } = require('../package.json');
 
 if (require('electron-squirrel-startup')) app.quit();
 
@@ -38,6 +39,8 @@ let store = loadStore();
 let mainWindow = null;
 let overlayWindow = null;
 
+const INTERACT_CSS = 'html, body { background: #3a3a3a !important; backdrop-filter: blur(12px) !important; }';
+
 function getDisplay(displayIndex) {
   const displays = screen.getAllDisplays();
   return displays[displayIndex] || displays[0];
@@ -63,11 +66,16 @@ function createOverlayWindow() {
   });
 
   overlayWindow.setAlwaysOnTop(true, 'screen-saver');
-  overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+  overlayWindow.setIgnoreMouseEvents(true);
   overlayWindow.show();
 
-  overlayWindow.webContents.on('did-finish-load', () => {
-    overlayWindow.webContents.insertCSS('html, body { background: transparent !important; }');
+  overlayWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+  overlayWindow.webContents.on('did-finish-load', async () => {
+    await overlayWindow.webContents.insertCSS('html, body { background: transparent !important; }');
+    if (overlayWindow._interacting) {
+      overlayWindow._interactCSSKey = await overlayWindow.webContents.insertCSS(INTERACT_CSS);
+    }
   });
 }
 
@@ -77,7 +85,7 @@ function createMainWindow() {
     height: 640,
     resizable: false,
     autoHideMenuBar: true,
-    title: 'Simple Overlay',
+    title: `Simple Overlay v${version}`,
     icon: getAppIcon(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -156,6 +164,31 @@ ipcMain.on('clear-history', () => {
   store.history = [];
   saveStore(store);
   mainWindow.webContents.send('store-updated', store);
+});
+
+ipcMain.on('interact-overlay', async () => {
+  overlayWindow._interacting = true;
+  overlayWindow.setIgnoreMouseEvents(false);
+  overlayWindow.setAlwaysOnTop(false);
+  overlayWindow.setFocusable(true);
+  mainWindow.setAlwaysOnTop(true, 'normal');
+  overlayWindow._interactCSSKey = await overlayWindow.webContents.insertCSS(INTERACT_CSS);
+  overlayWindow.focus();
+  mainWindow.webContents.send('interact-state', true);
+});
+
+ipcMain.on('stop-interact-overlay', async () => {
+  overlayWindow._interacting = false;
+  overlayWindow.setIgnoreMouseEvents(true);
+  overlayWindow.setAlwaysOnTop(true, 'screen-saver');
+  overlayWindow.setFocusable(false);
+  mainWindow.setAlwaysOnTop(false);
+  if (overlayWindow._interactCSSKey) {
+    await overlayWindow.webContents.removeInsertedCSS(overlayWindow._interactCSSKey);
+    overlayWindow._interactCSSKey = null;
+  }
+  mainWindow.focus();
+  mainWindow.webContents.send('interact-state', false);
 });
 
 app.whenReady().then(() => {
