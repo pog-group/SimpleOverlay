@@ -3,8 +3,17 @@ module.exports = {
     name: 'Simple Overlay',
     executableName: 'simple-overlay',
     asar: true,
-    // electron-packager auto-selects .ico / .icns / .png by platform
     icon: './assets/icons/icon',
+    ignore: (path) => {
+      const allowed = [
+        /^$/,
+        /^[/\\]package\.json$/,
+        /^[/\\]src([/\\]|$)/,
+        /^[/\\]assets([/\\]|$)/,
+        /^[/\\]node_modules([/\\]|$)/,
+      ];
+      return !allowed.some(r => r.test(path));
+    },
   },
   rebuildConfig: {},
   makers: [
