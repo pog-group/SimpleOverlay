@@ -28,7 +28,14 @@ function loadStore() {
       return data;
     }
   } catch (_) {}
-  return { history: [], saved: [], selectedMonitor: 0 };
+  return {
+    history: [],
+    saved: [
+      'http://overlazy.imthespyke.fr/',
+      'https://broadcast-center.imthespyke.fr/',
+    ],
+    selectedMonitor: 0,
+  };
 }
 
 function saveStore(data) {
