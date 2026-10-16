@@ -222,6 +222,8 @@
     .remove:hover { color: var(--warn); }
     .star.on { color: var(--star); }
 
+    .field-error { color: var(--warn); font-size: 12px; }
+
     .footer { flex-shrink: 0; font-size: 11px; color: var(--faint); text-align: center; }
     .footer kbd { margin-left: 2px; margin-right: 4px; }
   </style>
@@ -241,6 +243,7 @@
       <button class="btn-ghost" id="saveBtn" title="Save to favorites" aria-label="Save to favorites">★</button>
       <button class="btn-primary" id="loadBtn">Load</button>
     </div>
+    <div class="field-error" id="urlError" role="alert" hidden></div>
   </div>
 
   <!-- Target: a display or a window to follow -->
@@ -468,13 +471,21 @@
     tabSaved.onclick = () => { tab = 'saved'; renderList(); };
     clearHistBtn.onclick = () => window.api.clearHistory();
 
-    function loadUrl(url) {
-      urlInput.value = url;
-      updateSaveBtn();
-      currentUrl = url;
+    const urlError = $('urlError');
+    function showUrlError(message) {
+      urlError.textContent = message;
+      urlError.hidden = !message;
+    }
+
+    async function loadUrl(url) {
+      const result = await window.api.setUrl(url, true);
+      if (!result.ok) { showUrlError(result.error); return; }
+      showUrlError('');
+      urlInput.value = result.url; // the cleaned-up address (https:// added, host lowercased)
+      currentUrl = result.url;
       pageReady = true; // optimistic; the main process reports a failed load
+      updateSaveBtn();
       updateEnabled();
-      window.api.setUrl(url, true);
       renderList();
     }
 
@@ -494,12 +505,13 @@
       saveBtn.title = saved ? 'Remove from favorites' : 'Save to favorites';
       saveBtn.setAttribute('aria-label', saveBtn.title);
     }
-    urlInput.addEventListener('input', () => { updateSaveBtn(); updateEnabled(); });
-    saveBtn.onclick = () => {
+    urlInput.addEventListener('input', () => { updateSaveBtn(); updateEnabled(); showUrlError(''); });
+    saveBtn.onclick = async () => {
       const url = urlInput.value.trim();
       if (!url) return;
-      if ((store.saved || []).includes(url)) window.api.removeSaved(url);
-      else window.api.saveUrl(url);
+      if ((store.saved || []).includes(url)) { window.api.removeSaved(url); return; }
+      const result = await window.api.saveUrl(url);
+      if (!result.ok) showUrlError(result.error);
     };
 
     // ── Overlay controls ──

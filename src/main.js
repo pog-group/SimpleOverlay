@@ -3,6 +3,7 @@ const path = require('path');
 const { version } = require('../package.json');
 const windows = require('./windows');
 const updater = require('./updater');
+const { normalizeUrl } = require('./url');
 
 // Squirrel runs the app briefly during install/update/uninstall. Quit right away and skip all startup work.
 const isSquirrelEvent = require('electron-squirrel-startup');
@@ -32,6 +33,7 @@ let overlayOn = false;
 let interactMode = null; // null | 'interact' (clicks work) | 'edit' (clicks work + fullscreen)
 let follow = null;       // { hwnd, title, proc, watcher, retry, alive, minimized, focused, ours, rect } while following a window
 let loadFailed = false;
+let pendingHistoryUrl = null; // recorded in Recent only once the page has actually loaded
 let lastBounds = '';
 let lastStatus = { tone: 'off', text: 'Overlay hidden' };
 
@@ -76,9 +78,18 @@ function createOverlayWindow() {
     }
   });
 
-  overlayWindow.webContents.on('did-finish-load', () => setLoadFailed(false));
+  overlayWindow.webContents.on('did-finish-load', () => {
+    setLoadFailed(false);
+    if (pendingHistoryUrl) {
+      storage.addHistory(pendingHistoryUrl).then(notifyStore);
+      pendingHistoryUrl = null;
+    }
+  });
   overlayWindow.webContents.on('did-fail-load', (_, code, _desc, _url, isMainFrame) => {
-    if (isMainFrame && code !== -3) setLoadFailed(true); // -3 = aborted by a newer navigation
+    if (isMainFrame && code !== -3) { // -3 = aborted by a newer navigation
+      pendingHistoryUrl = null;
+      setLoadFailed(true);
+    }
   });
 }
 
@@ -370,14 +381,23 @@ ipcMain.on('set-hide-unfocused', (_, value) => {
   applyOverlay();
 });
 
-ipcMain.on('set-url', (_, { url, show }) => {
-  storage.addHistory(url).then(notifyStore);
+// Returns { ok, url } or { ok: false, error } so the panel can show what is wrong.
+ipcMain.handle('set-url', (_, { url, show }) => {
+  const result = normalizeUrl(url);
+  if (!result.ok) return result;
+  pendingHistoryUrl = result.url;
   loadFailed = false;
-  overlayWindow.loadURL(url).catch(() => {}); // failures are reported via did-fail-load
+  overlayWindow.loadURL(result.url).catch(() => {}); // failures are reported via did-fail-load
   if (show) showOverlay();
+  return result;
 });
 
-ipcMain.on('save-url', (_, url) => storage.addSaved(url).then(notifyStore));
+ipcMain.handle('save-url', async (_, url) => {
+  const result = normalizeUrl(url);
+  if (result.ok) await storage.addSaved(result.url).then(notifyStore);
+  return result;
+});
+
 ipcMain.on('remove-saved', (_, url) => storage.removeSaved(url).then(notifyStore));
 ipcMain.on('remove-history', (_, url) => storage.removeHistory(url).then(notifyStore));
 ipcMain.on('clear-history', () => storage.clearHistory().then(notifyStore));

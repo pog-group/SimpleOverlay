@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const lockfile = require('proper-lockfile');
 const writeFileAtomic = require('write-file-atomic');
+const { normalizeUrl } = require('./url');
 
 const HISTORY_LIMIT = 30;
 const DEFAULT_SAVED = [
@@ -33,7 +34,8 @@ function sanitize(raw) {
     .map((e) => (typeof e === 'string' ? e : e && e.url)) // older versions stored objects
     .filter((e) => typeof e === 'string' && e);
   return {
-    history: strings(raw.history).slice(0, HISTORY_LIMIT),
+    // Recent only ever holds addresses that can be loaded (older versions stored anything typed).
+    history: strings(raw.history).filter((u) => normalizeUrl(u).ok).slice(0, HISTORY_LIMIT),
     saved: Array.isArray(raw.saved) ? strings(raw.saved) : DEFAULT_SAVED.slice(),
     selectedMonitor: Number.isInteger(raw.selectedMonitor) ? raw.selectedMonitor : 0,
     hideWhenUnfocused: raw.hideWhenUnfocused !== false,
