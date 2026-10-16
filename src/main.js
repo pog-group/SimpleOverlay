@@ -32,6 +32,7 @@ const INTERACT_CSS = 'html, body { background: #3a3a3a !important; backdrop-filt
 let overlayOn = false;
 let interactMode = null; // null | 'interact' (clicks work) | 'edit' (clicks work + fullscreen)
 let follow = null;       // { hwnd, title, proc, watcher, retry, alive, minimized, focused, ours, rect } while following a window
+let overlayVisible = false; // whether the overlay is actually showing right now
 let loadFailed = false;
 let pendingHistoryUrl = null; // recorded in Recent only once the page has actually loaded
 let lastBounds = '';
@@ -174,8 +175,10 @@ function applyOverlay() {
     }
   }
   overlayWindow.setOpacity(visible ? 1 : 0);
+  overlayVisible = visible;
+  status.visible = visible;
 
-  if (status.tone !== lastStatus.tone || status.text !== lastStatus.text || status.short !== lastStatus.short) {
+  if (status.tone !== lastStatus.tone || status.text !== lastStatus.text || status.short !== lastStatus.short || status.visible !== lastStatus.visible) {
     lastStatus = status;
     send('status', status);
   }
@@ -274,10 +277,24 @@ function toggleOverlay() {
   showOverlay();
 }
 
+// Start/stop run one at a time, so mashing the hotkey can't interleave two transitions
+// (that could leave the dark interact background stuck on the overlay).
+let interactQueue = Promise.resolve();
+function queueInteract(task) {
+  const run = interactQueue.then(task);
+  interactQueue = run.catch(() => {});
+  return run;
+}
+
+const startInteract = (mode, fromHotkey = false) => queueInteract(() => doStartInteract(mode, fromHotkey));
+const stopInteract = (focusPanel = true) => queueInteract(() => doStopInteract(focusPanel));
+
 // fromHotkey: the user is in another app, so don't pull the control panel in front of it.
-async function startInteract(mode, fromHotkey = false) {
+async function doStartInteract(mode, fromHotkey) {
   if (!overlayOn) showOverlay();
   if (!overlayOn) return;
+  // Clicking into an overlay you can't see is pointless; fullscreen interact still works.
+  if (mode === 'interact' && follow && !overlayVisible) return;
   const alreadyInteracting = !!interactMode;
   interactMode = mode;
   if (!alreadyInteracting) {
@@ -295,7 +312,7 @@ async function startInteract(mode, fromHotkey = false) {
   send('interact-state', interactMode);
 }
 
-async function stopInteract(focusPanel = true) {
+async function doStopInteract(focusPanel) {
   if (!interactMode) return;
   interactMode = null;
   overlayWindow._interacting = false;
@@ -314,7 +331,7 @@ async function stopInteract(focusPanel = true) {
 }
 
 function toggleInteract() {
-  return interactMode ? stopInteract(false) : startInteract('interact', true);
+  return queueInteract(() => (interactMode ? doStopInteract(false) : doStartInteract('interact', true)));
 }
 
 // ── IPC ──
