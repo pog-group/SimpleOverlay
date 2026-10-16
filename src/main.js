@@ -386,6 +386,12 @@ ipcMain.on('remove-saved', (_, url) => {
   send('store-updated', store);
 });
 
+ipcMain.on('remove-history', (_, url) => {
+  store.history = store.history.filter(u => u !== url);
+  saveStore(store);
+  send('store-updated', store);
+});
+
 ipcMain.on('clear-history', () => {
   store.history = [];
   saveStore(store);

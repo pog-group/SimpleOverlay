@@ -196,6 +196,16 @@
       flex-shrink: 0;
     }
     .star:hover { color: var(--star); }
+
+    .remove {
+      background: transparent;
+      color: var(--faint);
+      font-size: 11px;
+      line-height: 1;
+      padding: 5px 6px;
+      flex-shrink: 0;
+    }
+    .remove:hover { color: var(--warn); }
     .star.on { color: var(--star); }
 
     .footer { flex-shrink: 0; font-size: 11px; color: var(--faint); text-align: center; }
@@ -343,7 +353,7 @@
     hideUnfocused.onchange = () => window.api.setHideUnfocused(hideUnfocused.checked);
 
     // ── Library list ──
-    function makeItem(url, isSaved) {
+    function makeItem(url, isSaved, removable) {
       const row = document.createElement('div');
       row.className = 'item' + (isSaved ? '' : ' is-history') + (url === currentUrl ? ' current' : '');
       row.tabIndex = 0;
@@ -366,6 +376,15 @@
 
       row.appendChild(star);
       row.appendChild(urlEl);
+      if (removable) {
+        const rm = document.createElement('button');
+        rm.className = 'remove';
+        rm.textContent = '✕';
+        rm.title = 'Remove from recent';
+        rm.setAttribute('aria-label', rm.title);
+        rm.onclick = (e) => { e.stopPropagation(); window.api.removeHistory(url); };
+        row.appendChild(rm);
+      }
       row.onclick = () => loadUrl(url);
       row.onkeydown = (e) => { if (e.key === 'Enter' && e.target === row) loadUrl(url); };
       return row;
@@ -383,7 +402,8 @@
       tabSaved.textContent = `★ Saved (${saved.length})`;
       tabRecent.setAttribute('aria-pressed', !showSaved);
       tabSaved.setAttribute('aria-pressed', showSaved);
-      clearHistBtn.hidden = showSaved || !recent.length;
+      // visibility (not hidden) so the header keeps its height and nothing shifts between tabs
+      clearHistBtn.style.visibility = showSaved || !recent.length ? 'hidden' : 'visible';
 
       listEl.innerHTML = '';
       if (!items.length) {
@@ -395,7 +415,7 @@
         listEl.appendChild(empty);
         return;
       }
-      items.forEach(u => listEl.appendChild(makeItem(u, savedSet.has(u))));
+      items.forEach(u => listEl.appendChild(makeItem(u, savedSet.has(u), !showSaved)));
     }
 
     tabRecent.onclick = () => { tab = 'recent'; renderList(); };

@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('api', {
   setHideUnfocused: (value) => ipcRenderer.send('set-hide-unfocused', value),
   saveUrl: (url) => ipcRenderer.send('save-url', url),
   removeSaved: (url) => ipcRenderer.send('remove-saved', url),
+  removeHistory: (url) => ipcRenderer.send('remove-history', url),
   clearHistory: () => ipcRenderer.send('clear-history'),
   interactOverlay: (mode) => ipcRenderer.send('interact-overlay', mode),
   stopInteractOverlay: () => ipcRenderer.send('stop-interact-overlay'),
