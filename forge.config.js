@@ -2,7 +2,8 @@ module.exports = {
   packagerConfig: {
     name: 'Simple Overlay',
     executableName: 'simple-overlay',
-    asar: true,
+    // Native modules (koffi) can't be loaded from inside the asar archive.
+    asar: { unpack: '**/*.node' },
     icon: './assets/icons/icon',
     ignore: (path) => {
       const allowed = [
