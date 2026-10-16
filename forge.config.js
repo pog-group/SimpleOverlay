@@ -52,4 +52,16 @@ module.exports = {
       config: {},
     },
   ],
+  // `npm run publish:win` builds, then uploads Setup.exe, RELEASES and the .nupkg to a draft
+  // GitHub release for v<package.json version>. Needs a GITHUB_TOKEN env variable.
+  publishers: [
+    {
+      name: '@electron-forge/publisher-github',
+      config: {
+        repository: { owner: 'pog-group', name: 'SimpleOverlay' },
+        prerelease: false,
+        draft: true,
+      },
+    },
+  ],
 };

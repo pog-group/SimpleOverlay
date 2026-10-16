@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { version } = require('../package.json');
 const windows = require('./windows');
+const { checkForUpdates } = require('./updater');
 
 if (require('electron-squirrel-startup')) app.quit();
 
@@ -410,6 +411,7 @@ app.whenReady().then(() => {
   };
   bind('CommandOrControl+Alt+O', toggleOverlay);
   bind('CommandOrControl+Alt+I', toggleInteract);
+  setTimeout(() => checkForUpdates(mainWindow), process.env.SIMPLEOVERLAY_FAKE_UPDATE ? 1500 : 5000);
 });
 
 app.on('will-quit', () => {

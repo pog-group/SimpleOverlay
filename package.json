@@ -1,16 +1,18 @@
 {
   "name": "simple-overlay",
   "productName": "Simple Overlay",
-  "version": "27.0.0",
+  "version": "27.1.0",
   "description": "A fullscreen transparent overlay that displays a selected URL",
   "main": "src/main.js",
   "scripts": {
+    "test:update": "node scripts/test-update.js",
     "generate-icons": "node scripts/generate-icons.js",
     "start": "electron-forge start",
     "make": "node scripts/generate-icons.js && electron-forge make --platform win32 --arch x64 && electron-forge make --platform linux --arch x64 && electron-forge make --platform darwin --arch x64",
     "make:win": "node scripts/generate-icons.js && electron-forge make --platform win32 --arch x64",
     "make:linux": "node scripts/generate-icons.js && electron-forge make --platform linux --arch x64",
-    "make:mac": "node scripts/generate-icons.js && electron-forge make --platform darwin --arch x64"
+    "make:mac": "node scripts/generate-icons.js && electron-forge make --platform darwin --arch x64",
+    "publish:win": "node scripts/generate-icons.js && electron-forge publish --platform win32 --arch x64"
   },
   "devDependencies": {
     "@electron-forge/cli": "^8.0.1",
@@ -19,6 +21,7 @@
     "@electron-forge/maker-rpm": "^8.0.1",
     "@electron-forge/maker-squirrel": "^8.0.1",
     "@electron-forge/maker-zip": "^8.0.1",
+    "@electron-forge/publisher-github": "^8.0.1",
     "@resvg/resvg-js": "^2.6.2",
     "electron": "^44.8.0",
     "png2icons": "^2.0.1"
