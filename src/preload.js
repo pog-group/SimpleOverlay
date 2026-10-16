@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('api', {
   listWindows: () => ipcRenderer.invoke('list-windows'),
   showOverlay: () => ipcRenderer.send('show-overlay'),
   hideOverlay: () => ipcRenderer.send('hide-overlay'),
+  setAudioMuted: (muted) => ipcRenderer.send('set-audio-muted', muted),
   reloadOverlay: () => ipcRenderer.send('reload-overlay'),
   setUrl: (url, show = false) => ipcRenderer.invoke('set-url', { url, show }),
   setTarget: (target) => ipcRenderer.send('set-target', target),

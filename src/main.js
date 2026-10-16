@@ -71,6 +71,7 @@ function createOverlayWindow() {
   overlayWindow.show();
 
   overlayWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  overlayWindow.webContents.setAudioMuted(true); // the overlay is silent unless the user turns sound on
 
   overlayWindow.webContents.on('did-finish-load', async () => {
     await overlayWindow.webContents.insertCSS('html, body { background: transparent !important; }');
@@ -353,6 +354,7 @@ ipcMain.handle('get-state', () => ({
   hideWhenUnfocused: store.hideWhenUnfocused,
   canFollow: windows.SUPPORTED,
   canShow: hasUrl(),
+  audioMuted: overlayWindow.webContents.isAudioMuted(),
   update: updater.getUpdate(),
 }));
 
@@ -366,6 +368,7 @@ ipcMain.handle('get-displays', () => {
 
 ipcMain.handle('list-windows', () => windows.listWindows());
 
+ipcMain.on('set-audio-muted', (_, muted) => overlayWindow.webContents.setAudioMuted(!!muted));
 ipcMain.on('install-update', updater.installUpdate);
 ipcMain.on('show-overlay', showOverlay);
 ipcMain.on('hide-overlay', hideOverlay);

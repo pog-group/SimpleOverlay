@@ -263,6 +263,7 @@
   <div class="row">
     <button class="btn-toggle" id="toggleBtn" style="flex:3">Show Overlay</button>
     <button class="btn-ghost" id="reloadBtn" style="flex:1" title="Reload the page">↺ Reload</button>
+    <button class="btn-ghost" id="soundBtn" aria-pressed="false"></button>
   </div>
 
   <div class="row">
@@ -586,6 +587,21 @@
     toggleBtn.onclick = () => overlayOn ? window.api.hideOverlay() : window.api.showOverlay();
     $('reloadBtn').onclick = () => window.api.reloadOverlay();
 
+    // The overlay page is silent by default; this lets its audio through.
+    const soundBtn = $('soundBtn');
+    function setMuted(muted) {
+      soundBtn.dataset.muted = muted;
+      soundBtn.textContent = muted ? '🔇' : '🔊';
+      soundBtn.title = muted ? 'Overlay sound is off. Click to turn it on' : 'Overlay sound is on. Click to mute';
+      soundBtn.setAttribute('aria-label', soundBtn.title);
+      soundBtn.setAttribute('aria-pressed', !muted);
+    }
+    soundBtn.onclick = () => {
+      const muted = soundBtn.dataset.muted !== 'true';
+      setMuted(muted);
+      window.api.setAudioMuted(muted);
+    };
+
     function toggleMode(mode) {
       if (interactMode === mode) window.api.stopInteractOverlay();
       else window.api.interactOverlay(mode);
@@ -604,6 +620,7 @@
       renderTargets();
       renderList();
       pageReady = state.canShow;
+      setMuted(state.audioMuted);
       setOverlayState(state.overlayOn);
       setInteractState(state.interactMode);
       setStatus(state.status);
