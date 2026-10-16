@@ -5,7 +5,9 @@ const { version } = require('../package.json');
 const windows = require('./windows');
 const updater = require('./updater');
 
-if (require('electron-squirrel-startup')) app.quit();
+// Squirrel runs the app briefly during install/update/uninstall. Quit right away and skip all startup work.
+const isSquirrelEvent = require('electron-squirrel-startup');
+if (isSquirrelEvent) app.quit();
 
 // Pin Windows taskbar icon to this app ID so it always groups correctly
 if (process.platform === 'win32') {
@@ -124,7 +126,8 @@ function createMainWindow() {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
   mainWindow.on('closed', () => {
     stopFollow();
-    overlayWindow.destroy();
+    // On quit-and-install every window is closed in turn, so the overlay may already be gone.
+    if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.destroy();
     app.quit();
   });
 }
@@ -404,6 +407,7 @@ ipcMain.on('interact-overlay', (_, mode) => startInteract(mode === 'edit' ? 'edi
 ipcMain.on('stop-interact-overlay', () => stopInteract());
 
 app.whenReady().then(() => {
+  if (isSquirrelEvent) return;
   Menu.setApplicationMenu(null); // no File/Edit/... bar, not even when pressing Alt
   createOverlayWindow();
   createMainWindow();
