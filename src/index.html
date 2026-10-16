@@ -111,6 +111,8 @@
 
     .btn-mode { background: #6c3483; color: #fff; font-weight: 600; flex: 1; padding: 8px 12px; }
     .btn-mode:hover { filter: brightness(1.15); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button:disabled:active { transform: none; }
     .btn-mode.active { background: #c0392b; }
 
     kbd {
@@ -273,6 +275,7 @@
     let currentUrl = '';
     let overlayOn = false;
     let interactMode = null;
+    let pageReady = false; // the overlay has a page that loaded
     let status = { tone: 'off', text: '' };
     let canFollow = false;
     let target = { kind: 'display', index: 0 };
@@ -403,6 +406,8 @@
       urlInput.value = url;
       updateSaveBtn();
       currentUrl = url;
+      pageReady = true; // optimistic; the main process reports a failed load
+      updateEnabled();
       window.api.setUrl(url, true);
       renderList();
     }
@@ -423,7 +428,7 @@
       saveBtn.title = saved ? 'Remove from favorites' : 'Save to favorites';
       saveBtn.setAttribute('aria-label', saveBtn.title);
     }
-    urlInput.addEventListener('input', updateSaveBtn);
+    urlInput.addEventListener('input', () => { updateSaveBtn(); updateEnabled(); });
     saveBtn.onclick = () => {
       const url = urlInput.value.trim();
       if (!url) return;
@@ -441,6 +446,25 @@
         + '<kbd>Ctrl+Alt+O</kbd>';
       toggleBtn.title = reason ? status.text : '';
       toggleBtn.classList.toggle('active', overlayOn);
+      updateEnabled();
+    }
+
+    // Gray out whatever can't work: needs a page that loaded and a non-empty URL field.
+    // Once the overlay is on, Hide stays available.
+    function updateEnabled() {
+      const canShow = pageReady && urlInput.value.trim() !== '';
+      const blocked = !canShow && !overlayOn;
+      toggleBtn.disabled = blocked;
+      interactBtn.disabled = blocked;
+      editBtn.disabled = blocked;
+      if (blocked) {
+        const why = !urlInput.value.trim() ? 'Enter a URL first'
+          : pageReady ? 'Load a URL first' : 'Load a URL first (the last one failed to load)';
+        toggleBtn.title = interactBtn.title = editBtn.title = why;
+      } else {
+        interactBtn.title = 'Click and type in the overlay page';
+        editBtn.title = 'Interact with the overlay in fullscreen, then snap back onto the window';
+      }
     }
 
     function setOverlayState(visible) {
@@ -481,6 +505,7 @@
       refreshWinBtn.hidden = !canFollow;
       renderTargets();
       renderList();
+      pageReady = state.canShow;
       setOverlayState(state.overlayOn);
       setInteractState(state.interactMode);
       setStatus(state.status);
@@ -489,6 +514,7 @@
       window.api.onOverlayState(setOverlayState);
       window.api.onInteractState(setInteractState);
       window.api.onStatus(setStatus);
+      window.api.onCanShow((ok) => { pageReady = ok; updateEnabled(); });
 
       // Coming back to the panel is when you pick a window, so refresh then.
       window.addEventListener('focus', refreshWindows);

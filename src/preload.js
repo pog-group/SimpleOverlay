@@ -19,5 +19,6 @@ contextBridge.exposeInMainWorld('api', {
   onStoreUpdated: (cb) => ipcRenderer.on('store-updated', (_, data) => cb(data)),
   onOverlayState: (cb) => ipcRenderer.on('overlay-state', (_, visible) => cb(visible)),
   onInteractState: (cb) => ipcRenderer.on('interact-state', (_, mode) => cb(mode)),
+  onCanShow: (cb) => ipcRenderer.on('can-show', (_, value) => cb(value)),
   onStatus: (cb) => ipcRenderer.on('status', (_, status) => cb(status)),
 });

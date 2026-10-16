@@ -56,6 +56,7 @@ const INTERACT_CSS = 'html, body { background: #3a3a3a !important; backdrop-filt
 let overlayOn = false;
 let interactMode = null; // null | 'interact' (clicks work) | 'edit' (clicks work + fullscreen)
 let follow = null;       // { hwnd, title, watcher, alive, minimized, focused, ours, rect } while following a window
+let loadFailed = false;
 let lastBounds = '';
 let lastStatus = { tone: 'off', text: 'Overlay hidden' };
 
@@ -98,6 +99,11 @@ function createOverlayWindow() {
     if (overlayWindow._interacting) {
       overlayWindow._interactCSSKey = await overlayWindow.webContents.insertCSS(INTERACT_CSS);
     }
+  });
+
+  overlayWindow.webContents.on('did-finish-load', () => setLoadFailed(false));
+  overlayWindow.webContents.on('did-fail-load', (_, code, _desc, _url, isMainFrame) => {
+    if (isMainFrame && code !== -3) setLoadFailed(true); // -3 = aborted by a newer navigation
   });
 }
 
@@ -222,7 +228,21 @@ function startFollow(hwnd, title) {
 }
 
 // ── Show / hide / interact ──
+// True when there is a page that can actually be shown.
+function hasUrl() {
+  const url = overlayWindow && overlayWindow.webContents.getURL();
+  return !!url && url !== 'about:blank' && !loadFailed;
+}
+
+function setLoadFailed(value) {
+  loadFailed = value;
+  send('can-show', hasUrl());
+  // A page that failed to load leaves nothing to show.
+  if (value && overlayOn) hideOverlay();
+}
+
 function showOverlay() {
+  if (!hasUrl()) return; // nothing to show yet
   overlayOn = true;
   send('overlay-state', true);
   applyOverlay();
@@ -243,6 +263,7 @@ function toggleOverlay() {
 // fromHotkey: the user is in another app, so don't pull the control panel in front of it.
 async function startInteract(mode, fromHotkey = false) {
   if (!overlayOn) showOverlay();
+  if (!overlayOn) return;
   const alreadyInteracting = !!interactMode;
   interactMode = mode;
   if (!alreadyInteracting) {
@@ -298,6 +319,7 @@ ipcMain.handle('get-state', () => ({
   target: currentTarget(),
   hideWhenUnfocused: store.hideWhenUnfocused,
   canFollow: windows.SUPPORTED,
+  canShow: hasUrl(),
 }));
 
 ipcMain.handle('get-displays', () => {
@@ -315,7 +337,10 @@ ipcMain.on('hide-overlay', hideOverlay);
 
 ipcMain.on('reload-overlay', () => {
   const url = overlayWindow.webContents.getURL();
-  if (url && url !== 'about:blank') overlayWindow.loadURL(url);
+  if (url && url !== 'about:blank') {
+    loadFailed = false;
+    overlayWindow.loadURL(url).catch(() => {});
+  }
 });
 
 ipcMain.on('set-target', async (_, t) => {
@@ -342,7 +367,8 @@ ipcMain.on('set-url', (_, { url, show }) => {
   store.history = [url, ...store.history.filter(u => u !== url)].slice(0, HISTORY_LIMIT);
   saveStore(store);
   send('store-updated', store);
-  overlayWindow.loadURL(url);
+  loadFailed = false;
+  overlayWindow.loadURL(url).catch(() => {}); // failures are reported via did-fail-load
   if (show) showOverlay();
 });
 
