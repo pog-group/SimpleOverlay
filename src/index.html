@@ -535,6 +535,7 @@
       const canShow = pageReady && urlInput.value.trim() !== '';
       const blocked = !canShow && !overlayOn;
       toggleBtn.disabled = blocked;
+      $('reloadBtn').disabled = !pageReady; // nothing to reload until a page has loaded
       interactBtn.disabled = blocked;
       editBtn.disabled = blocked;
       if (blocked) {
