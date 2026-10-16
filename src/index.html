@@ -312,13 +312,16 @@
         const entries = windowList.slice();
         // Keep the current target selectable even if it vanished from the list.
         if (target.kind === 'window' && !known.has(String(target.hwnd))) {
-          entries.unshift({ hwnd: String(target.hwnd), title: target.title, proc: '' });
+          entries.push({ hwnd: String(target.hwnd), title: target.title, proc: '' });
         }
+        const byName = (a, b) => (a.proc || '').localeCompare(b.proc || '', undefined, { sensitivity: 'base' })
+          || a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+        entries.sort(byName);
         entries.forEach(w => {
           const opt = document.createElement('option');
           opt.value = 'w:' + w.hwnd;
           opt.dataset.title = w.title;
-          opt.textContent = w.proc ? `${w.title}  (${w.proc})` : w.title;
+          opt.textContent = w.proc ? `${w.proc} — ${w.title}` : w.title;
           wGroup.appendChild(opt);
         });
         targetSelect.appendChild(wGroup);
