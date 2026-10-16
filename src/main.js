@@ -438,7 +438,7 @@ app.whenReady().then(() => {
   };
   bind('CommandOrControl+Alt+O', toggleOverlay);
   bind('CommandOrControl+Alt+I', toggleInteract);
-  setTimeout(() => updater.checkForUpdates(mainWindow, (u) => send('update-state', u)),
+  updater.startUpdateChecks(mainWindow, (u) => send('update-state', u),
     process.env.SIMPLEOVERLAY_FAKE_UPDATE ? 1500 : 5000);
 });
 

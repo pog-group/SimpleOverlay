@@ -54,12 +54,22 @@ async function fetchLatestRelease() {
   return res.json();
 }
 
+const RECHECK_MS = 30 * 60 * 1000;
+
+// Checks once after `firstDelayMs`, then every 30 minutes, since the overlay is often left open for days.
 // onChange(update) fires when a newer release is found or its phase changes.
-async function checkForUpdates(window, onChange) {
+function startUpdateChecks(window, onChange, firstDelayMs) {
   parentWindow = window;
   notify = onChange;
+  setTimeout(checkForUpdates, firstDelayMs);
+  setInterval(checkForUpdates, RECHECK_MS);
+}
+
+async function checkForUpdates() {
   // Dev runs and unpacked builds can't update themselves.
   if (!app.isPackaged && !FAKE) return;
+  // Don't disturb a download in progress.
+  if (current && current.phase === 'downloading') return;
 
   let release;
   try {
@@ -70,7 +80,9 @@ async function checkForUpdates(window, onChange) {
   if (!release || release.draft || release.prerelease) return;
   if (!FAKE && (!isNewer(release.tag_name, app.getVersion()) || !isComplete(release))) return;
 
-  current = { version: release.tag_name.replace(/^v/i, ''), url: release.html_url, phase: 'available' };
+  const version = release.tag_name.replace(/^v/i, '');
+  if (current && current.version === version) return; // already announced
+  current = { version, url: release.html_url, phase: 'available' };
   notify(current);
 }
 
@@ -107,4 +119,4 @@ function installUpdate() {
   }
 }
 
-module.exports = { checkForUpdates, installUpdate, getUpdate };
+module.exports = { startUpdateChecks, installUpdate, getUpdate };
