@@ -5,36 +5,47 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';" />
   <title></title>
   <style>
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --surface-2: #12192e;
+      --border: #34385c;
+      --text: #e6e8f0;
+      --muted: #9aa3bd;
+      --faint: #7d86a3;
+      --accent: #4a90d9;
+      --accent-hover: #357abd;
+      --star: #f5c542;
+      --on: #3ecf8e;
+      --idle: #f0b429;
+      --warn: #ff6b6b;
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       font-size: 13px;
-      background: #1a1a2e;
-      color: #e0e0e0;
-      padding: 16px;
+      background: var(--bg);
+      color: var(--text);
+      padding: 12px 16px 10px;
       height: 100vh;
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 10px;
     }
 
-    .app-header {
-      flex-shrink: 0;
-    }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-    .app-header img {
-      width: 100%;
-      height: auto;
-      display: block;
-    }
+    .app-header { flex-shrink: 0; height: 48px; display: flex; justify-content: center; }
+    .app-header img { height: 100%; width: auto; display: block; }
 
-    label {
+    label, .label {
       font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 0.8px;
-      color: #888;
+      color: var(--muted);
       display: block;
       margin-bottom: 4px;
     }
@@ -42,28 +53,21 @@
     input[type="text"], select {
       width: 100%;
       padding: 7px 10px;
-      background: #16213e;
-      border: 1px solid #2a2a4a;
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: 6px;
-      color: #e0e0e0;
+      color: var(--text);
       font-size: 13px;
       outline: none;
       transition: border-color 0.15s;
     }
+    input[type="text"]:focus, select:focus { border-color: var(--accent); }
+    select option, select optgroup { background: var(--surface); color: var(--text); }
 
-    input[type="text"]:focus, select:focus {
-      border-color: #4a90d9;
-    }
-
-    select option { background: #16213e; }
-
-    .row {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-
-    .row input { flex: 1; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .row > input, .row > select { flex: 1; min-width: 0; }
+    .section { display: flex; flex-direction: column; gap: 4px; min-height: 0; flex-shrink: 0; }
+    .section.grow { flex: 1; flex-shrink: 1; }
 
     button {
       padding: 7px 12px;
@@ -72,152 +76,128 @@
       cursor: pointer;
       font-size: 12px;
       font-weight: 500;
+      font-family: inherit;
       transition: background 0.15s, transform 0.08s;
       white-space: nowrap;
     }
-
     button:active { transform: scale(0.97); }
 
-    .btn-primary { background: #4a90d9; color: #fff; }
-    .btn-primary:hover { background: #357abd; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
 
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 6px 10px;
+    }
+    .btn-ghost:hover { background: var(--border); color: #fff; }
+    .btn-ghost.saved { color: var(--star); border-color: var(--star); }
+    .btn-ghost.saved:hover { background: rgba(245, 197, 66, 0.15); color: var(--star); }
+
+    /* Overlay on/off: blue to show, neutral to hide. Hiding is not destructive. */
     .btn-toggle {
       padding: 10px;
       font-size: 14px;
       font-weight: 600;
       border-radius: 8px;
-      background: #27ae60;
+      background: var(--accent);
+      border: 1px solid transparent;
       color: #fff;
     }
-    .btn-toggle.active { background: #c0392b; }
-    .btn-toggle:hover { filter: brightness(1.1); }
+    .btn-toggle:hover { background: var(--accent-hover); }
+    .btn-toggle.active { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+    .btn-toggle.active:hover { background: rgba(74, 144, 217, 0.12); }
 
-    .btn-ghost {
+    .btn-mode { background: #6c3483; color: #fff; font-weight: 600; flex: 1; padding: 8px 12px; }
+    .btn-mode:hover { filter: brightness(1.15); }
+    .btn-mode.active { background: #c0392b; }
+
+    kbd {
+      font-family: inherit;
+      font-size: 10px;
+      font-weight: 500;
+      padding: 1px 5px;
+      margin-left: 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.14);
+      vertical-align: 1px;
+    }
+
+    .btn-toggle .sub { font-size: 12px; font-weight: 500; margin-left: 8px; }
+    .btn-toggle .sub[data-tone="idle"] { color: var(--idle); }
+    .btn-toggle .sub[data-tone="warn"] { color: var(--warn); }
+
+    .check { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text); font-size: 12px; text-transform: none; letter-spacing: normal; margin-bottom: 0; }
+    .check input { accent-color: var(--accent); width: 14px; height: 14px; }
+
+    [hidden] { display: none !important; }
+
+    /* ── Library ── */
+    .section-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; }
+
+    .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .segmented button {
+      border-radius: 0;
       background: transparent;
-      border: 1px solid #2a2a4a;
-      color: #aaa;
-      padding: 4px 8px;
-      font-size: 11px;
+      color: var(--muted);
+      padding: 5px 12px;
+      font-size: 12px;
     }
-    .btn-ghost:hover { background: #2a2a4a; color: #fff; }
+    .segmented button + button { border-left: 1px solid var(--border); }
+    .segmented button:hover { color: #fff; }
+    .segmented button[aria-pressed="true"] { background: var(--border); color: #fff; }
 
-    .btn-interact {
-      background: #6c3483;
-      color: #fff;
-      font-weight: 600;
-    }
-    .btn-interact.active { background: #922b21; }
-    .btn-interact:hover { filter: brightness(1.15); }
-
-    .section {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      min-height: 0;
-    }
-
-    .section.grow { flex: 1; }
-
-    .section-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-shrink: 0;
-    }
-
-    .divider {
-      height: 1px;
-      background: #2a2a4a;
-      flex-shrink: 0;
-    }
-
-    /* ── Lists ── */
     .list-box {
-      background: #12192e;
-      border: 1px solid #2a2a4a;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
       border-radius: 8px;
       overflow-y: auto;
       flex: 1;
       min-height: 0;
     }
+    .list-box::-webkit-scrollbar { width: 6px; }
+    .list-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-    .list-box::-webkit-scrollbar { width: 4px; }
-    .list-box::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 2px; }
+    .empty { padding: 20px; text-align: center; color: var(--faint); font-size: 12px; }
 
-    .empty {
-      padding: 20px;
-      text-align: center;
-      color: #3a3a5a;
-      font-size: 12px;
-    }
-
-    /* Saved cards */
-    .saved-card {
+    .item {
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 4px 8px;
-      border-bottom: 1px solid #1a1a38;
+      padding: 2px 6px 2px 4px;
+      border-bottom: 1px solid #1f2342;
       cursor: pointer;
       transition: background 0.1s;
     }
-    .saved-card:last-child { border-bottom: none; }
-    .saved-card:hover { background: #1a2540; }
-    .saved-card:hover .card-remove { opacity: 1; }
+    .item:last-child { border-bottom: none; }
+    .item:hover { background: #1a2540; }
+    .item.current { box-shadow: inset 3px 0 0 var(--accent); background: #18233f; }
 
-    .card-url {
+    .item-url {
       flex: 1;
-      font-size: 11px;
-      color: #b0b8d0;
+      font-size: 12px;
+      color: var(--text);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      padding: 5px 0;
     }
+    .item.is-history .item-url { color: var(--muted); }
 
-    .card-remove {
-      opacity: 0;
-      transition: opacity 0.15s;
+    .star {
       background: transparent;
-      border: none;
-      color: #c0392b;
-      font-size: 12px;
-      padding: 1px 3px;
-      cursor: pointer;
-      flex-shrink: 0;
+      color: var(--faint);
+      font-size: 15px;
       line-height: 1;
-    }
-    .card-remove:hover { color: #e74c3c; }
-
-    /* History rows */
-    .hist-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 8px;
-      border-bottom: 1px solid #1a1a38;
-      cursor: pointer;
-      transition: background 0.1s;
-    }
-    .hist-item:last-child { border-bottom: none; }
-    .hist-item:hover { background: #1a2540; }
-
-    .hist-index {
-      font-size: 10px;
-      color: #3a4060;
-      width: 12px;
-      text-align: right;
+      padding: 4px 6px;
       flex-shrink: 0;
-      font-variant-numeric: tabular-nums;
     }
+    .star:hover { color: var(--star); }
+    .star.on { color: var(--star); }
 
-    .hist-url {
-      flex: 1;
-      font-size: 11px;
-      color: #8090b0;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+    .footer { flex-shrink: 0; font-size: 11px; color: var(--faint); text-align: center; }
+    .footer kbd { margin-left: 2px; margin-right: 4px; }
   </style>
 </head>
 <body>
@@ -225,205 +205,295 @@
     <img src="../assets/icon_banner.svg" alt="Simple Overlay" draggable="false" />
   </div>
 
-  <!-- URL Input -->
-  <div class="section" style="flex-shrink:0">
-    <label>URL</label>
+  <!-- URL -->
+  <div class="section">
+    <label for="urlInput">URL</label>
     <div class="row">
       <input type="text" id="urlInput" placeholder="https://example.com" />
-      <button class="btn-ghost" id="saveBtn" title="Save to list">★</button>
+      <button class="btn-ghost" id="saveBtn" title="Save to favorites" aria-label="Save to favorites">★</button>
       <button class="btn-primary" id="loadBtn">Load</button>
     </div>
   </div>
 
-  <!-- Monitor Select -->
-  <div class="section" style="flex-shrink:0">
-    <label>Display</label>
-    <select id="displaySelect"></select>
+  <!-- Target: a display or a window to follow -->
+  <div class="section">
+    <label for="targetSelect">Show on</label>
+    <div class="row">
+      <select id="targetSelect"></select>
+      <button class="btn-ghost" id="refreshWinBtn" title="Refresh window list" aria-label="Refresh window list" hidden>↻</button>
+    </div>
+    <label class="check" id="hideUnfocusedRow" hidden>
+      <input type="checkbox" id="hideUnfocused" />
+      Hide when that window is not focused
+    </label>
   </div>
 
-  <!-- Toggle + Reload -->
-  <div class="row" style="flex-shrink:0">
+  <!-- Overlay controls -->
+  <div class="row">
     <button class="btn-toggle" id="toggleBtn" style="flex:3">Show Overlay</button>
-    <button class="btn-ghost" id="reloadBtn" style="flex:1">↺ Reload</button>
+    <button class="btn-ghost" id="reloadBtn" style="flex:1" title="Reload the page">↺ Reload</button>
   </div>
 
-  <!-- Interact -->
-  <div class="row" style="flex-shrink:0">
-    <button class="btn-interact" id="interactBtn" style="flex:1" disabled>Interact</button>
+  <div class="row">
+    <button class="btn-mode" id="interactBtn" title="Click and type in the overlay page">Interact</button>
+    <button class="btn-mode" id="editBtn" title="Interact with the overlay in fullscreen, then snap back onto the window" hidden>Interact in fullscreen</button>
   </div>
 
-  <div class="divider"></div>
-
-  <!-- Saved URLs -->
+  <!-- Library: saved favorites + recent history in one list -->
   <div class="section grow">
     <div class="section-header">
-      <label style="margin:0">Saved</label>
+      <div class="segmented" role="group" aria-label="Filter">
+        <button id="tabRecent" aria-pressed="true">Recent</button>
+        <button id="tabSaved" aria-pressed="false">★ Saved</button>
+      </div>
+      <button class="btn-ghost" id="clearHistBtn">Clear history</button>
     </div>
-    <div class="list-box" id="savedList">
-      <div class="empty">No saved URLs</div>
-    </div>
+    <div class="list-box" id="list"></div>
   </div>
 
-  <!-- History -->
-  <div class="section grow">
-    <div class="section-header">
-      <label style="margin:0">History</label>
-      <button class="btn-ghost" id="clearHistBtn">Clear</button>
-    </div>
-    <div class="list-box" id="historyList">
-      <div class="empty">No history</div>
-    </div>
-  </div>
+  <div class="footer"><kbd>Ctrl+Alt+O</kbd>show/hide<kbd>Ctrl+Alt+I</kbd>interact</div>
 
   <script>
-    const urlInput = document.getElementById('urlInput');
-    const displaySelect = document.getElementById('displaySelect');
-    const toggleBtn = document.getElementById('toggleBtn');
-    const reloadBtn = document.getElementById('reloadBtn');
-    const loadBtn = document.getElementById('loadBtn');
-    const saveBtn = document.getElementById('saveBtn');
-    const savedList = document.getElementById('savedList');
-    const historyList = document.getElementById('historyList');
-    const clearHistBtn = document.getElementById('clearHistBtn');
-    const interactBtn = document.getElementById('interactBtn');
+    const $ = (id) => document.getElementById(id);
+    const urlInput = $('urlInput');
+    const targetSelect = $('targetSelect');
+    const refreshWinBtn = $('refreshWinBtn');
+    const hideUnfocusedRow = $('hideUnfocusedRow');
+    const hideUnfocused = $('hideUnfocused');
+    const toggleBtn = $('toggleBtn');
+    const interactBtn = $('interactBtn');
+    const editBtn = $('editBtn');
+    const listEl = $('list');
+    const tabRecent = $('tabRecent');
+    const tabSaved = $('tabSaved');
+    const clearHistBtn = $('clearHistBtn');
 
+    let store = { saved: [], history: [] };
+    let tab = 'recent';
+    let currentUrl = '';
     let overlayOn = false;
-    let interacting = false;
+    let interactMode = null;
+    let status = { tone: 'off', text: '' };
+    let canFollow = false;
+    let target = { kind: 'display', index: 0 };
+    let displays = [];
+    let windowList = [];
 
-    function getDisplayIndex() {
-      return parseInt(displaySelect.value) || 0;
+    // ── Target select ──
+    function renderTargets() {
+      targetSelect.innerHTML = '';
+      const dGroup = document.createElement('optgroup');
+      dGroup.label = 'Displays';
+      displays.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = 'd:' + d.id;
+        opt.textContent = d.isPrimary ? d.label + ' (Primary)' : d.label;
+        dGroup.appendChild(opt);
+      });
+      targetSelect.appendChild(dGroup);
+
+      if (canFollow) {
+        const wGroup = document.createElement('optgroup');
+        wGroup.label = 'Follow a window';
+        const known = new Set(windowList.map(w => w.hwnd));
+        const entries = windowList.slice();
+        // Keep the current target selectable even if it vanished from the list.
+        if (target.kind === 'window' && !known.has(String(target.hwnd))) {
+          entries.unshift({ hwnd: String(target.hwnd), title: target.title, proc: '' });
+        }
+        entries.forEach(w => {
+          const opt = document.createElement('option');
+          opt.value = 'w:' + w.hwnd;
+          opt.dataset.title = w.title;
+          opt.textContent = w.proc ? `${w.title}  (${w.proc})` : w.title;
+          wGroup.appendChild(opt);
+        });
+        targetSelect.appendChild(wGroup);
+      }
+
+      targetSelect.value = target.kind === 'window' ? 'w:' + target.hwnd : 'd:' + target.index;
+      const following = target.kind === 'window';
+      hideUnfocusedRow.hidden = !following;
+      editBtn.hidden = !following;
     }
 
-    function renderSaved(items) {
-      if (!items || items.length === 0) {
-        savedList.innerHTML = '<div class="empty">No saved URLs</div>';
+    async function refreshWindows() {
+      if (!canFollow) return;
+      refreshWinBtn.disabled = true;
+      windowList = await window.api.listWindows();
+      refreshWinBtn.disabled = false;
+      renderTargets();
+    }
+
+    targetSelect.onchange = () => {
+      const opt = targetSelect.selectedOptions[0];
+      if (targetSelect.value.startsWith('w:')) {
+        target = { kind: 'window', hwnd: targetSelect.value.slice(2), title: opt.dataset.title || opt.textContent };
+      } else {
+        target = { kind: 'display', index: parseInt(targetSelect.value.slice(2)) || 0 };
+      }
+      renderTargets();
+      window.api.setTarget(target);
+    };
+
+    refreshWinBtn.onclick = refreshWindows;
+    hideUnfocused.onchange = () => window.api.setHideUnfocused(hideUnfocused.checked);
+
+    // ── Library list ──
+    function makeItem(url, isSaved) {
+      const row = document.createElement('div');
+      row.className = 'item' + (isSaved ? '' : ' is-history') + (url === currentUrl ? ' current' : '');
+      row.tabIndex = 0;
+
+      const star = document.createElement('button');
+      star.className = 'star' + (isSaved ? ' on' : '');
+      star.textContent = isSaved ? '★' : '☆';
+      star.title = isSaved ? 'Remove from favorites' : 'Add to favorites';
+      star.setAttribute('aria-label', star.title);
+      star.onclick = (e) => {
+        e.stopPropagation();
+        if (isSaved) window.api.removeSaved(url);
+        else window.api.saveUrl(url);
+      };
+
+      const urlEl = document.createElement('div');
+      urlEl.className = 'item-url';
+      urlEl.textContent = url;
+      urlEl.title = url;
+
+      row.appendChild(star);
+      row.appendChild(urlEl);
+      row.onclick = () => loadUrl(url);
+      row.onkeydown = (e) => { if (e.key === 'Enter' && e.target === row) loadUrl(url); };
+      return row;
+    }
+
+    function renderList() {
+      updateSaveBtn();
+      const saved = store.saved || [];
+      const recent = store.history || [];
+      const savedSet = new Set(saved);
+      const showSaved = tab === 'saved';
+      const items = showSaved ? saved : recent;
+
+      tabRecent.textContent = `Recent (${recent.length})`;
+      tabSaved.textContent = `★ Saved (${saved.length})`;
+      tabRecent.setAttribute('aria-pressed', !showSaved);
+      tabSaved.setAttribute('aria-pressed', showSaved);
+      clearHistBtn.hidden = showSaved || !recent.length;
+
+      listEl.innerHTML = '';
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = showSaved
+          ? 'No favorites yet. Click ☆ on any URL to save it.'
+          : 'Nothing here yet. Load a URL to get started.';
+        listEl.appendChild(empty);
         return;
       }
-      savedList.innerHTML = '';
-      items.forEach(url => {
-        const card = document.createElement('div');
-        card.className = 'saved-card';
-
-        const urlEl = document.createElement('div');
-        urlEl.className = 'card-url';
-        urlEl.textContent = url;
-        urlEl.title = url;
-
-        const removeBtn = document.createElement('button');
-        removeBtn.className = 'card-remove';
-        removeBtn.textContent = '✕';
-        removeBtn.title = 'Remove';
-        removeBtn.onclick = (e) => { e.stopPropagation(); window.api.removeSaved(url); };
-
-        card.appendChild(urlEl);
-        card.appendChild(removeBtn);
-        card.onclick = () => loadUrl(url);
-
-        savedList.appendChild(card);
-      });
+      items.forEach(u => listEl.appendChild(makeItem(u, savedSet.has(u))));
     }
 
-    function renderHistory(items) {
-      if (!items || items.length === 0) {
-        historyList.innerHTML = '<div class="empty">No history</div>';
-        return;
-      }
-      historyList.innerHTML = '';
-      items.forEach((url, i) => {
-        const row = document.createElement('div');
-        row.className = 'hist-item';
-
-        const idx = document.createElement('div');
-        idx.className = 'hist-index';
-        idx.textContent = i + 1;
-
-        const urlEl = document.createElement('div');
-        urlEl.className = 'hist-url';
-        urlEl.textContent = url;
-        urlEl.title = url;
-
-        row.appendChild(idx);
-        row.appendChild(urlEl);
-        row.onclick = () => loadUrl(url);
-
-        historyList.appendChild(row);
-      });
-    }
+    tabRecent.onclick = () => { tab = 'recent'; renderList(); };
+    tabSaved.onclick = () => { tab = 'saved'; renderList(); };
+    clearHistBtn.onclick = () => window.api.clearHistory();
 
     function loadUrl(url) {
       urlInput.value = url;
-      window.api.setUrl(url, getDisplayIndex(), true);
+      updateSaveBtn();
+      currentUrl = url;
+      window.api.setUrl(url, true);
+      renderList();
     }
 
-    function applyStore(store) {
-      renderSaved(store.saved);
-      renderHistory(store.history);
-      if (store.selectedMonitor !== undefined) {
-        displaySelect.value = store.selectedMonitor;
-      }
+    function submitUrl() {
+      const url = urlInput.value.trim();
+      if (!url) { urlInput.focus(); return; }
+      loadUrl(url);
+    }
+
+    $('loadBtn').onclick = submitUrl;
+    urlInput.onkeydown = (e) => { if (e.key === 'Enter') submitUrl(); };
+    const saveBtn = $('saveBtn');
+    function updateSaveBtn() {
+      const saved = (store.saved || []).includes(urlInput.value.trim());
+      saveBtn.classList.toggle('saved', saved);
+      saveBtn.textContent = saved ? '★' : '☆';
+      saveBtn.title = saved ? 'Remove from favorites' : 'Save to favorites';
+      saveBtn.setAttribute('aria-label', saveBtn.title);
+    }
+    urlInput.addEventListener('input', updateSaveBtn);
+    saveBtn.onclick = () => {
+      const url = urlInput.value.trim();
+      if (!url) return;
+      if ((store.saved || []).includes(url)) window.api.removeSaved(url);
+      else window.api.saveUrl(url);
+    };
+
+    // ── Overlay controls ──
+    // The Show/Hide button doubles as the status display: when the overlay is on but
+    // hidden (target not focused, minimized, closed), the reason shows beside the label.
+    function renderToggle() {
+      const reason = overlayOn && (status.tone === 'idle' || status.tone === 'warn') ? status.short : '';
+      toggleBtn.innerHTML = (overlayOn ? 'Hide Overlay' : 'Show Overlay')
+        + (reason ? `<span class="sub" data-tone="${status.tone}">· ${reason}</span>` : '')
+        + '<kbd>Ctrl+Alt+O</kbd>';
+      toggleBtn.title = reason ? status.text : '';
+      toggleBtn.classList.toggle('active', overlayOn);
     }
 
     function setOverlayState(visible) {
       overlayOn = visible;
-      toggleBtn.textContent = visible ? 'Hide Overlay' : 'Show Overlay';
-      toggleBtn.classList.toggle('active', visible);
-      interactBtn.disabled = !visible;
-      if (!visible && interacting) setInteractState(false);
+      renderToggle();
     }
 
-    function setInteractState(active) {
-      interacting = active;
-      interactBtn.textContent = active ? 'Stop Interacting' : 'Interact';
-      interactBtn.classList.toggle('active', active);
-      if (active) window.api.interactOverlay();
-      else window.api.stopInteractOverlay();
+    function setInteractState(mode) {
+      interactMode = mode;
+      interactBtn.textContent = mode === 'interact' ? 'Stop Interacting' : 'Interact';
+      interactBtn.classList.toggle('active', mode === 'interact');
+      editBtn.textContent = mode === 'edit' ? 'Stop Interacting' : 'Interact in fullscreen';
+      editBtn.classList.toggle('active', mode === 'edit');
     }
+
+    function setStatus(s) {
+      status = s;
+      renderToggle();
+    }
+
+    toggleBtn.onclick = () => overlayOn ? window.api.hideOverlay() : window.api.showOverlay();
+    $('reloadBtn').onclick = () => window.api.reloadOverlay();
+
+    function toggleMode(mode) {
+      if (interactMode === mode) window.api.stopInteractOverlay();
+      else window.api.interactOverlay(mode);
+    }
+    interactBtn.onclick = () => toggleMode('interact');
+    editBtn.onclick = () => toggleMode('edit');
 
     async function init() {
-      const displays = await window.api.getDisplays();
-      displaySelect.innerHTML = '';
-      displays.forEach(d => {
-        const opt = document.createElement('option');
-        opt.value = d.id;
-        opt.textContent = d.isPrimary ? d.label + ' (Primary)' : d.label;
-        displaySelect.appendChild(opt);
-      });
+      const [d, s, state] = await Promise.all([window.api.getDisplays(), window.api.getStore(), window.api.getState()]);
+      displays = d;
+      store = s;
+      canFollow = state.canFollow;
+      target = state.target;
+      hideUnfocused.checked = state.hideWhenUnfocused;
+      refreshWinBtn.hidden = !canFollow;
+      renderTargets();
+      renderList();
+      setOverlayState(state.overlayOn);
+      setInteractState(state.interactMode);
+      setStatus(state.status);
 
-      const store = await window.api.getStore();
-      applyStore(store);
-
-      window.api.onStoreUpdated(applyStore);
+      window.api.onStoreUpdated((next) => { store = next; renderList(); });
       window.api.onOverlayState(setOverlayState);
-      window.api.onInteractState((active) => {
-        interacting = active;
-        interactBtn.textContent = active ? 'Stop Interacting' : 'Interact';
-        interactBtn.classList.toggle('active', active);
-      });
+      window.api.onInteractState(setInteractState);
+      window.api.onStatus(setStatus);
+
+      // Coming back to the panel is when you pick a window, so refresh then.
+      window.addEventListener('focus', refreshWindows);
+      refreshWindows();
     }
-
-    reloadBtn.onclick = () => window.api.reloadOverlay();
-
-    toggleBtn.onclick = () => {
-      if (overlayOn) window.api.hideOverlay();
-      else window.api.showOverlay();
-    };
-
-    loadBtn.onclick = () => {
-      const url = urlInput.value.trim();
-      if (!url) { urlInput.focus(); return; }
-      window.api.setUrl(url, getDisplayIndex(), true);
-    };
-
-    saveBtn.onclick = () => {
-      const url = urlInput.value.trim();
-      if (url) window.api.saveUrl(url);
-    };
-
-    displaySelect.onchange = () => window.api.moveOverlay(getDisplayIndex());
-
-    clearHistBtn.onclick = () => window.api.clearHistory();
-
-    interactBtn.onclick = () => setInteractState(!interacting);
 
     init();
   </script>
