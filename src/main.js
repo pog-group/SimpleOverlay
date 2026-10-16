@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { version } = require('../package.json');
 const windows = require('./windows');
-const { checkForUpdates } = require('./updater');
+const updater = require('./updater');
 
 if (require('electron-squirrel-startup')) app.quit();
 
@@ -320,6 +320,7 @@ ipcMain.handle('get-state', () => ({
   hideWhenUnfocused: store.hideWhenUnfocused,
   canFollow: windows.SUPPORTED,
   canShow: hasUrl(),
+  update: updater.getUpdate(),
 }));
 
 ipcMain.handle('get-displays', () => {
@@ -332,6 +333,7 @@ ipcMain.handle('get-displays', () => {
 
 ipcMain.handle('list-windows', () => windows.listWindows());
 
+ipcMain.on('install-update', updater.installUpdate);
 ipcMain.on('show-overlay', showOverlay);
 ipcMain.on('hide-overlay', hideOverlay);
 
@@ -411,7 +413,8 @@ app.whenReady().then(() => {
   };
   bind('CommandOrControl+Alt+O', toggleOverlay);
   bind('CommandOrControl+Alt+I', toggleInteract);
-  setTimeout(() => checkForUpdates(mainWindow), process.env.SIMPLEOVERLAY_FAKE_UPDATE ? 1500 : 5000);
+  setTimeout(() => updater.checkForUpdates(mainWindow, (u) => send('update-state', u)),
+    process.env.SIMPLEOVERLAY_FAKE_UPDATE ? 1500 : 5000);
 });
 
 app.on('will-quit', () => {

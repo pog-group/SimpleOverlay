@@ -38,6 +38,7 @@
 
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+    body { position: relative; }
     .app-header { flex-shrink: 0; height: 48px; display: flex; justify-content: center; }
     .app-header img { height: 100%; width: auto; display: block; }
 
@@ -125,6 +126,19 @@
       background: rgba(255, 255, 255, 0.14);
       vertical-align: 1px;
     }
+
+    .btn-update {
+      position: absolute;
+      top: 14px;
+      right: 16px;
+      background: var(--star);
+      color: #1a1a2e;
+      font-weight: 600;
+      padding: 6px 12px;
+      z-index: 2;
+    }
+    .btn-update:hover { filter: brightness(1.08); }
+    .btn-update:disabled { opacity: 0.7; cursor: progress; }
 
     .btn-toggle .sub { font-size: 12px; font-weight: 500; margin-left: 8px; }
     .btn-toggle .sub[data-tone="idle"] { color: var(--idle); }
@@ -217,6 +231,8 @@
     <img src="../assets/icon_banner.svg" alt="Simple Overlay" draggable="false" />
   </div>
 
+  <button class="btn-update" id="updateBtn" hidden></button>
+
   <!-- URL -->
   <div class="section">
     <label for="urlInput">URL</label>
@@ -273,6 +289,7 @@
     const hideUnfocusedRow = $('hideUnfocusedRow');
     const hideUnfocused = $('hideUnfocused');
     const toggleBtn = $('toggleBtn');
+    const updateBtn = $('updateBtn');
     const interactBtn = $('interactBtn');
     const editBtn = $('editBtn');
     const listEl = $('list');
@@ -508,6 +525,16 @@
       renderToggle();
     }
 
+    function setUpdate(u) {
+      updateBtn.hidden = !u;
+      if (!u) return;
+      const busy = u.phase === 'downloading';
+      updateBtn.disabled = busy;
+      updateBtn.textContent = busy ? 'Updating…' : 'Update available';
+      updateBtn.title = busy ? `Downloading ${u.version}, the app will restart` : `Install ${u.version} and restart`;
+    }
+    updateBtn.onclick = () => window.api.installUpdate();
+
     toggleBtn.onclick = () => overlayOn ? window.api.hideOverlay() : window.api.showOverlay();
     $('reloadBtn').onclick = () => window.api.reloadOverlay();
 
@@ -537,6 +564,8 @@
       window.api.onOverlayState(setOverlayState);
       window.api.onInteractState(setInteractState);
       window.api.onStatus(setStatus);
+      window.api.onUpdateState(setUpdate);
+      setUpdate(state.update);
       window.api.onCanShow((ok) => { pageReady = ok; updateEnabled(); });
 
       // Coming back to the panel is when you pick a window, so refresh then.
