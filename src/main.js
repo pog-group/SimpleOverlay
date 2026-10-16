@@ -1,6 +1,5 @@
 const { app, BrowserWindow, Menu, ipcMain, screen, globalShortcut } = require('electron');
 const path = require('path');
-const fs = require('fs');
 const { version } = require('../package.json');
 const windows = require('./windows');
 const updater = require('./updater');
@@ -21,38 +20,11 @@ function getAppIcon() {
   return path.join(base, 'icon.png');
 }
 
-const STORE_PATH = path.join(app.getPath('userData'), 'store.json');
-
-function loadStore() {
-  try {
-    if (fs.existsSync(STORE_PATH)) {
-      const data = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'));
-      // Sanitize saved entries that may be objects from a previous version
-      data.saved = (data.saved || []).map(e => typeof e === 'string' ? e : e.url).filter(Boolean);
-      if (data.hideWhenUnfocused === undefined) data.hideWhenUnfocused = true;
-      return data;
-    }
-  } catch (_) {}
-  return {
-    history: [],
-    saved: [
-      'http://overlazy.imthespyke.fr/',
-      'https://broadcast-center.imthespyke.fr/',
-    ],
-    selectedMonitor: 0,
-    hideWhenUnfocused: true,
-  };
-}
-
-function saveStore(data) {
-  fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2));
-}
-
-let store = loadStore();
+const storage = require('./store');
+const store = storage.state; // live object: saved, history, selectedMonitor, hideWhenUnfocused
 let mainWindow = null;
 let overlayWindow = null;
 
-const HISTORY_LIMIT = 30;
 const INTERACT_CSS = 'html, body { background: #3a3a3a !important; backdrop-filter: blur(12px) !important; }';
 
 // Everything the overlay's geometry and visibility is derived from.
@@ -307,6 +279,8 @@ function toggleInteract() {
 }
 
 // ── IPC ──
+const notifyStore = () => send('store-updated', store);
+
 function currentTarget() {
   return follow
     ? { kind: 'window', hwnd: follow.hwnd, title: follow.title }
@@ -354,7 +328,7 @@ ipcMain.on('set-target', async (_, t) => {
   } else {
     stopFollow();
     store.selectedMonitor = Number(t && t.index) || 0;
-    saveStore(store);
+    storage.persist();
     // "Edit layout" only exists while following a window.
     if (interactMode === 'edit') await startInteract('interact');
   }
@@ -364,50 +338,29 @@ ipcMain.on('set-target', async (_, t) => {
 
 ipcMain.on('set-hide-unfocused', (_, value) => {
   store.hideWhenUnfocused = !!value;
-  saveStore(store);
+  storage.persist();
   applyOverlay();
 });
 
 ipcMain.on('set-url', (_, { url, show }) => {
-  store.history = [url, ...store.history.filter(u => u !== url)].slice(0, HISTORY_LIMIT);
-  saveStore(store);
-  send('store-updated', store);
+  storage.addHistory(url).then(notifyStore);
   loadFailed = false;
   overlayWindow.loadURL(url).catch(() => {}); // failures are reported via did-fail-load
   if (show) showOverlay();
 });
 
-ipcMain.on('save-url', (_, url) => {
-  if (!store.saved.includes(url)) {
-    store.saved = [url, ...store.saved];
-    saveStore(store);
-    send('store-updated', store);
-  }
-});
-
-ipcMain.on('remove-saved', (_, url) => {
-  store.saved = store.saved.filter(u => u !== url);
-  saveStore(store);
-  send('store-updated', store);
-});
-
-ipcMain.on('remove-history', (_, url) => {
-  store.history = store.history.filter(u => u !== url);
-  saveStore(store);
-  send('store-updated', store);
-});
-
-ipcMain.on('clear-history', () => {
-  store.history = [];
-  saveStore(store);
-  send('store-updated', store);
-});
+ipcMain.on('save-url', (_, url) => storage.addSaved(url).then(notifyStore));
+ipcMain.on('remove-saved', (_, url) => storage.removeSaved(url).then(notifyStore));
+ipcMain.on('remove-history', (_, url) => storage.removeHistory(url).then(notifyStore));
+ipcMain.on('clear-history', () => storage.clearHistory().then(notifyStore));
 
 ipcMain.on('interact-overlay', (_, mode) => startInteract(mode === 'edit' ? 'edit' : 'interact'));
 ipcMain.on('stop-interact-overlay', () => stopInteract());
 
 app.whenReady().then(() => {
   if (isSquirrelEvent) return;
+  storage.init(app.getPath('userData'));
+  storage.watch(notifyStore); // other running instances may change the saved list or history
   Menu.setApplicationMenu(null); // no File/Edit/... bar, not even when pressing Alt
   createOverlayWindow();
   createMainWindow();

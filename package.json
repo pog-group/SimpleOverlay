@@ -27,7 +27,9 @@
     "png2icons": "^2.0.1"
   },
   "dependencies": {
-    "electron-squirrel-startup": "^1.0.1"
+    "electron-squirrel-startup": "^1.0.1",
+    "proper-lockfile": "^4.1.2",
+    "write-file-atomic": "^8.0.0"
   },
   "keywords": [],
   "author": {
