@@ -40,6 +40,14 @@ function isNewer(latest, installed) {
   return false;
 }
 
+// A release that is still being uploaded (or whose installer files are missing) must not be offered:
+// Squirrel would fail with "no update found". Windows needs the RELEASES index and the full package.
+function isComplete(release) {
+  const assets = (release.assets || []).filter((a) => a.state === 'uploaded');
+  if (process.platform !== 'win32') return assets.length > 0;
+  return assets.some((a) => a.name === 'RELEASES') && assets.some((a) => /-full\.nupkg$/.test(a.name));
+}
+
 async function fetchLatestRelease() {
   const res = await net.fetch(API_URL, { headers: { Accept: 'application/vnd.github+json' } });
   if (!res.ok) throw new Error(`GitHub responded ${res.status}`);
@@ -60,7 +68,7 @@ async function checkForUpdates(window, onChange) {
     return; // offline or rate-limited: try again next launch
   }
   if (!release || release.draft || release.prerelease) return;
-  if (!FAKE && !isNewer(release.tag_name, app.getVersion())) return;
+  if (!FAKE && (!isNewer(release.tag_name, app.getVersion()) || !isComplete(release))) return;
 
   current = { version: release.tag_name.replace(/^v/i, ''), url: release.html_url, phase: 'available' };
   notify(current);
