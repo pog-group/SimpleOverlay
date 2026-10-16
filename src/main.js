@@ -30,7 +30,7 @@ const INTERACT_CSS = 'html, body { background: #3a3a3a !important; backdrop-filt
 // Everything the overlay's geometry and visibility is derived from.
 let overlayOn = false;
 let interactMode = null; // null | 'interact' (clicks work) | 'edit' (clicks work + fullscreen)
-let follow = null;       // { hwnd, title, watcher, alive, minimized, focused, ours, rect } while following a window
+let follow = null;       // { hwnd, title, proc, watcher, retry, alive, minimized, focused, ours, rect } while following a window
 let loadFailed = false;
 let lastBounds = '';
 let lastStatus = { tone: 'off', text: 'Overlay hidden' };
@@ -136,7 +136,7 @@ function applyOverlay() {
     const name = `“${follow.title}”`;
     const r = follow.rect;
     if (!follow.alive) {
-      status = { tone: 'warn', short: 'window closed', text: `${name} was closed. Pick another window or a display.` };
+      status = { tone: 'warn', short: 'window not found', text: `${name} is gone. Waiting for it to come back, or pick another window.` };
     } else if (follow.minimized) {
       status = { tone: 'idle', short: 'minimized', text: `Hidden. ${name} is minimized.` };
     } else if (!r) {
@@ -172,26 +172,47 @@ function applyOverlay() {
 
 // ── Window following ──
 function stopFollow() {
-  if (follow && follow.watcher) follow.watcher.stop();
+  if (!follow) return;
+  if (follow.watcher) follow.watcher.stop();
+  clearInterval(follow.retry);
   follow = null;
 }
 
-function startFollow(hwnd, title) {
-  stopFollow();
-  const f = { hwnd, title, watcher: null, alive: true, minimized: false, focused: false, ours: false, rect: null };
-  follow = f;
+// When the followed window disappears and a window of the same app appears (an app restart), lock back on.
+// An exact title match wins; otherwise the app must have exactly one other window.
+function findReplacement(f) {
+  if (!f.proc) return null;
+  const candidates = windows.listWindows().filter(w => w.proc === f.proc && Number(w.hwnd) !== f.hwnd);
+  return candidates.find(w => w.title === f.title) || (candidates.length === 1 ? candidates[0] : null);
+}
+
+function watchFollowed(f) {
+  if (f.watcher) f.watcher.stop();
   f.watcher = windows.watchWindow(
-    hwnd,
+    f.hwnd,
     (s) => {
       if (follow !== f) return;
       f.alive = s.alive;
       f.minimized = s.minimized;
       f.focused = s.focused;
       f.ours = s.fgPid === process.pid;
-      // The helper reports physical pixels; Electron bounds are DIPs.
+      // The tracker reports physical pixels; Electron bounds are DIPs.
       f.rect = !s.alive ? null
         : typeof screen.screenToDipRect === 'function' ? screen.screenToDipRect(null, s.rect)
         : s.rect;
+      if (s.alive) {
+        clearInterval(f.retry);
+        f.retry = null;
+      } else if (!f.retry) {
+        f.retry = setInterval(() => {
+          const match = follow === f && findReplacement(f);
+          if (!match) return;
+          f.hwnd = Number(match.hwnd);
+          f.title = match.title;
+          watchFollowed(f);
+          send('target', currentTarget());
+        }, 1000);
+      }
       applyOverlay();
     },
     () => {
@@ -200,6 +221,13 @@ function startFollow(hwnd, title) {
       applyOverlay();
     },
   );
+}
+
+function startFollow(hwnd, title, proc) {
+  stopFollow();
+  const f = { hwnd, title, proc, watcher: null, retry: null, alive: true, minimized: false, focused: false, ours: false, rect: null };
+  follow = f;
+  watchFollowed(f);
 }
 
 // ── Show / hide / interact ──
@@ -283,7 +311,7 @@ const notifyStore = () => send('store-updated', store);
 
 function currentTarget() {
   return follow
-    ? { kind: 'window', hwnd: follow.hwnd, title: follow.title }
+    ? { kind: 'window', hwnd: follow.hwnd, title: follow.title, proc: follow.proc }
     : { kind: 'display', index: store.selectedMonitor };
 }
 
@@ -324,7 +352,7 @@ ipcMain.on('reload-overlay', () => {
 
 ipcMain.on('set-target', async (_, t) => {
   if (t && t.kind === 'window' && Number.isSafeInteger(Number(t.hwnd))) {
-    startFollow(Number(t.hwnd), String(t.title || 'window'));
+    startFollow(Number(t.hwnd), String(t.title || 'window'), String(t.proc || ''));
   } else {
     stopFollow();
     store.selectedMonitor = Number(t && t.index) || 0;

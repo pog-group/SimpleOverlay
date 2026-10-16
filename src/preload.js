@@ -23,5 +23,6 @@ contextBridge.exposeInMainWorld('api', {
   onCanShow: (cb) => ipcRenderer.on('can-show', (_, value) => cb(value)),
   installUpdate: () => ipcRenderer.send('install-update'),
   onUpdateState: (cb) => ipcRenderer.on('update-state', (_, update) => cb(update)),
+  onTarget: (cb) => ipcRenderer.on('target', (_, target) => cb(target)),
   onStatus: (cb) => ipcRenderer.on('status', (_, status) => cb(status)),
 });

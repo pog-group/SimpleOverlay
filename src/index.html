@@ -329,7 +329,7 @@
         const entries = windowList.slice();
         // Keep the current target selectable even if it vanished from the list.
         if (target.kind === 'window' && !known.has(String(target.hwnd))) {
-          entries.push({ hwnd: String(target.hwnd), title: target.title, proc: '' });
+          entries.push({ hwnd: String(target.hwnd), title: target.title, proc: target.proc || '' });
         }
         const byName = (a, b) => (a.proc || '').localeCompare(b.proc || '', undefined, { sensitivity: 'base' })
           || a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
@@ -338,6 +338,7 @@
           const opt = document.createElement('option');
           opt.value = 'w:' + w.hwnd;
           opt.dataset.title = w.title;
+          opt.dataset.proc = w.proc || '';
           opt.textContent = w.proc ? `${w.proc} — ${w.title}` : w.title;
           wGroup.appendChild(opt);
         });
@@ -350,13 +351,13 @@
       editBtn.hidden = !following;
     }
 
-    async function refreshWindows() {
     // Refreshes can be triggered rapidly (button spam, focus changes). Only one runs at a time and
     // any requests that arrive meanwhile collapse into a single follow-up run.
     let refreshing = false;
     let refreshQueued = false;
     let pendingList = null;
 
+    async function refreshWindows() {
       if (!canFollow) return;
       if (refreshing) { refreshQueued = true; return; }
       refreshing = true;
@@ -376,7 +377,6 @@
       renderTargets();
     }
 
-    targetSelect.onchange = () => {
     targetSelect.addEventListener('blur', () => {
       if (!pendingList) return;
       windowList = pendingList;
@@ -384,9 +384,10 @@
       renderTargets();
     });
 
+    targetSelect.onchange = () => {
       const opt = targetSelect.selectedOptions[0];
       if (targetSelect.value.startsWith('w:')) {
-        target = { kind: 'window', hwnd: targetSelect.value.slice(2), title: opt.dataset.title || opt.textContent };
+        target = { kind: 'window', hwnd: targetSelect.value.slice(2), title: opt.dataset.title || opt.textContent, proc: opt.dataset.proc || '' };
       } else {
         target = { kind: 'display', index: parseInt(targetSelect.value.slice(2)) || 0 };
       }
@@ -589,6 +590,7 @@
       window.api.onOverlayState(setOverlayState);
       window.api.onInteractState(setInteractState);
       window.api.onStatus(setStatus);
+      window.api.onTarget((t) => { target = t; renderTargets(); }); // the followed window came back under a new handle
       window.api.onUpdateState(setUpdate);
       setUpdate(state.update);
       window.api.onCanShow((ok) => { pageReady = ok; updateEnabled(); });
