@@ -581,7 +581,9 @@
       const busy = u.phase === 'downloading';
       updateBtn.disabled = busy;
       updateBtn.textContent = busy ? 'Updating…' : 'Update available';
-      updateBtn.title = busy ? `Downloading ${u.version}, the app will restart` : `Install ${u.version} and restart`;
+      updateBtn.title = busy ? `Downloading ${u.version}, the app will restart`
+        : u.canAutoInstall ? `Install ${u.version} and restart`
+        : `Open the release page to download ${u.version}`;
     }
     updateBtn.onclick = () => window.api.installUpdate();
 

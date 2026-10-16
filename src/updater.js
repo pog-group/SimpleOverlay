@@ -1,6 +1,8 @@
 // Looks for a newer GitHub release and installs it when the user clicks "Update available" in the UI.
 // Windows installs update in-app through Squirrel; other platforms get a link to the release page.
 const { app, autoUpdater, dialog, net, shell } = require('electron');
+const fs = require('fs');
+const path = require('path');
 
 const REPO = 'pog-group/SimpleOverlay';
 const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
@@ -10,12 +12,20 @@ const FEED_URL = `https://github.com/${REPO}/releases/latest/download`;
 // Testing: SIMPLEOVERLAY_FAKE_UPDATE=1 (see `npm run test:update`) pretends a newer release exists
 // and walks through the whole flow without touching GitHub or restarting the app.
 const FAKE = !!process.env.SIMPLEOVERLAY_FAKE_UPDATE;
+const FAKE_UNINSTALLED = process.env.SIMPLEOVERLAY_FAKE_UPDATE === 'uninstalled'; // pretend this copy wasn't installed
 const FAKE_RELEASE = { tag_name: 'v99.0.0', html_url: `https://github.com/${REPO}/releases` };
 
 let current = null;          // { version, url, phase: 'available' | 'downloading' } once a newer release is found
 let notify = () => {};
 let parentWindow = null;
 let squirrelReady = false;
+
+// Squirrel keeps its Update.exe next to the app folder. Without it (zip, build folder, dev run) the
+// app can't replace itself.
+function isSquirrelInstall() {
+  if (FAKE) return !FAKE_UNINSTALLED;
+  return process.platform === 'win32' && fs.existsSync(path.resolve(path.dirname(process.execPath), '..', 'Update.exe'));
+}
 
 function getUpdate() {
   return current;
@@ -82,7 +92,7 @@ async function checkForUpdates() {
 
   const version = release.tag_name.replace(/^v/i, '');
   if (current && current.version === version) return; // already announced
-  current = { version, url: release.html_url, phase: 'available' };
+  current = { version, url: release.html_url, phase: 'available', canAutoInstall: isSquirrelInstall() };
   notify(current);
 }
 
@@ -100,22 +110,40 @@ function setupSquirrel() {
   autoUpdater.setFeedURL({ url: FEED_URL });
 }
 
+async function openReleasePage(explanation) {
+  if (explanation) {
+    const { response } = await dialog.showMessageBox(parentWindow, {
+      type: 'info',
+      message: "This copy can't update itself.",
+      detail: explanation,
+      buttons: ['Open release page', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (response !== 0) return;
+  }
+  shell.openExternal(current.url);
+}
+
 // Called when the user clicks "Update available": download, install and restart.
 function installUpdate() {
   if (!current || current.phase === 'downloading') return;
 
-  if (FAKE) {
+  if (!current.canAutoInstall) {
+    // Windows copies that weren't installed with Setup.exe (zip, build folder) can't be replaced in place.
+    openReleasePage(process.platform === 'win32'
+      ? "It wasn't installed with the Setup installer, so updates can't be applied automatically. Download the new version from the release page instead."
+      : null);
+  } else if (FAKE) {
     setPhase('downloading');
     setTimeout(() => {
       setPhase('available');
       dialog.showMessageBox(parentWindow, { type: 'info', message: 'Test mode: the app would restart and install now.' });
     }, 2500);
-  } else if (process.platform === 'win32') {
+  } else {
     setPhase('downloading');
     setupSquirrel();
     autoUpdater.checkForUpdates(); // downloads right away; "update-downloaded" restarts into the new version
-  } else {
-    shell.openExternal(current.url);
   }
 }
 
