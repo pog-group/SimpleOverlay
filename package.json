@@ -13,14 +13,14 @@
     "make:mac": "node scripts/generate-icons.js && electron-forge make --platform darwin --arch x64"
   },
   "devDependencies": {
-    "@electron-forge/cli": "^7.8.0",
-    "@electron-forge/maker-deb": "^7.8.0",
-    "@electron-forge/maker-dmg": "^7.8.0",
-    "@electron-forge/maker-rpm": "^7.8.0",
-    "@electron-forge/maker-squirrel": "^7.8.0",
-    "@electron-forge/maker-zip": "^7.8.0",
+    "@electron-forge/cli": "^8.0.1",
+    "@electron-forge/maker-deb": "^8.0.1",
+    "@electron-forge/maker-dmg": "^8.0.1",
+    "@electron-forge/maker-rpm": "^8.0.1",
+    "@electron-forge/maker-squirrel": "^8.0.1",
+    "@electron-forge/maker-zip": "^8.0.1",
     "@resvg/resvg-js": "^2.6.2",
-    "electron": "^33.0.0",
+    "electron": "^44.8.0",
     "png2icons": "^2.0.1"
   },
   "dependencies": {
