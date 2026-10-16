@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, screen, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { version } = require('../package.json');
@@ -112,7 +112,6 @@ function createMainWindow() {
     width: 520,
     height: 640,
     resizable: false,
-    autoHideMenuBar: true,
     title: `Simple Overlay v${version}`,
     icon: getAppIcon(),
     webPreferences: {
@@ -402,6 +401,7 @@ ipcMain.on('interact-overlay', (_, mode) => startInteract(mode === 'edit' ? 'edi
 ipcMain.on('stop-interact-overlay', () => stopInteract());
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null); // no File/Edit/... bar, not even when pressing Alt
   createOverlayWindow();
   createMainWindow();
   applyOverlay();
