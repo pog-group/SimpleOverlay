@@ -351,14 +351,39 @@
     }
 
     async function refreshWindows() {
+    // Refreshes can be triggered rapidly (button spam, focus changes). Only one runs at a time and
+    // any requests that arrive meanwhile collapse into a single follow-up run.
+    let refreshing = false;
+    let refreshQueued = false;
+    let pendingList = null;
+
       if (!canFollow) return;
-      refreshWinBtn.disabled = true;
-      windowList = await window.api.listWindows();
-      refreshWinBtn.disabled = false;
+      if (refreshing) { refreshQueued = true; return; }
+      refreshing = true;
+      try {
+        applyWindowList(await window.api.listWindows());
+      } finally {
+        refreshing = false;
+        if (refreshQueued) { refreshQueued = false; refreshWindows(); }
+      }
+    }
+
+    // Rebuilding the options while the dropdown is open would close it or change the highlighted entry,
+    // so a list that arrives meanwhile waits until the select loses focus.
+    function applyWindowList(list) {
+      if (document.activeElement === targetSelect) { pendingList = list; return; }
+      windowList = list;
       renderTargets();
     }
 
     targetSelect.onchange = () => {
+    targetSelect.addEventListener('blur', () => {
+      if (!pendingList) return;
+      windowList = pendingList;
+      pendingList = null;
+      renderTargets();
+    });
+
       const opt = targetSelect.selectedOptions[0];
       if (targetSelect.value.startsWith('w:')) {
         target = { kind: 'window', hwnd: targetSelect.value.slice(2), title: opt.dataset.title || opt.textContent };
