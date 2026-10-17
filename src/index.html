@@ -226,6 +226,7 @@
     .star.on { color: var(--star); }
 
     .field-error { color: var(--warn); font-size: 12px; }
+    .notice { flex-shrink: 0; color: var(--faint); font-size: 11px; text-align: center; }
 
     .footer { flex-shrink: 0; font-size: 11px; color: var(--faint); text-align: center; }
     .footer kbd { margin-left: 2px; margin-right: 4px; }
@@ -304,6 +305,7 @@
   </div>
 
   <div class="footer"><kbd>Ctrl+Alt+O</kbd>show/hide<kbd>Ctrl+Alt+I</kbd>interact</div>
+  <div class="notice" title="Made for simple overlay pages. Loading any page, especially a regular website, carries security risks. You are responsible for what you load.">⚠ Only load pages you trust. You are responsible for what you load.</div>
 
   <script>
     const $ = (id) => document.getElementById(id);
