@@ -228,8 +228,6 @@
     .field-error { color: var(--warn); font-size: 12px; }
     .notice { flex-shrink: 0; color: var(--faint); font-size: 11px; text-align: center; }
 
-    .footer { flex-shrink: 0; font-size: 11px; color: var(--faint); text-align: center; }
-    .footer kbd { margin-left: 2px; margin-right: 4px; }
   </style>
 </head>
 <body>
@@ -288,7 +286,7 @@
   </div>
 
   <div class="row">
-    <button class="btn-mode" id="interactBtn" title="Click and type in the overlay page">Interact</button>
+    <button class="btn-mode" id="interactBtn" title="Click and type in the overlay page">Interact<kbd>Ctrl+Alt+I</kbd></button>
     <button class="btn-mode" id="editBtn" title="Interact with the overlay in fullscreen, then snap back onto the window" hidden>Interact in fullscreen</button>
   </div>
 
@@ -304,7 +302,6 @@
     <div class="list-box" id="list"></div>
   </div>
 
-  <div class="footer"><kbd>Ctrl+Alt+O</kbd>show/hide<kbd>Ctrl+Alt+I</kbd>interact</div>
   <div class="notice" title="Made for simple overlay pages. Loading any page, especially a regular website, carries security risks. You are responsible for what you load.">⚠ Only load pages you trust. You are responsible for what you load.</div>
 
   <script>
@@ -616,7 +613,8 @@
       const canShow = pageReady && urlInput.value.trim() !== '';
       const blocked = !canShow && !overlayOn;
       toggleBtn.disabled = blocked;
-      $('reloadBtn').disabled = !pageReady; // nothing to reload until a page has loaded      interactBtn.disabled = blocked;
+      $('reloadBtn').disabled = !pageReady; // nothing to reload until a page has loaded
+      interactBtn.disabled = blocked;
       editBtn.disabled = blocked;
       if (blocked) {
         const why = !urlInput.value.trim() ? 'Enter a URL first'
@@ -644,7 +642,7 @@
 
     function setInteractState(mode) {
       interactMode = mode;
-      interactBtn.textContent = mode === 'interact' ? 'Stop Interacting' : 'Interact';
+      interactBtn.innerHTML = (mode === 'interact' ? 'Stop Interacting' : 'Interact') + '<kbd>Ctrl+Alt+I</kbd>';
       interactBtn.classList.toggle('active', mode === 'interact');
       editBtn.textContent = mode === 'edit' ? 'Stop Interacting' : 'Interact in fullscreen';
       editBtn.classList.toggle('active', mode === 'edit');

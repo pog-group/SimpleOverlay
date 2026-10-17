@@ -309,11 +309,21 @@ const stopInteract = (focusPanel = true) => queueInteract(() => doStopInteract(f
 
 // fromHotkey: the user is in another app, so don't pull the control panel in front of it.
 async function doStartInteract(mode, fromHotkey) {
+  const wasOn = overlayOn;
   if (!overlayOn) showOverlay();
-  if (!overlayOn) return;
+  if (!overlayOn) { send('interact-state', interactMode); return; }
   // Clicking into an overlay you can't see is pointless; fullscreen interact still works.
   // Hidden only because the followed window lost focus doesn't count: interacting forces it visible.
-  if (mode === 'interact' && follow && !overlayVisible && lastStatus.short !== 'not focused') return;
+  if (mode === 'interact' && follow && !overlayVisible && lastStatus.short !== 'not focused') {
+    // Interact was what turned the overlay on, so undo that instead of leaving it on and unusable.
+    if (!wasOn) {
+      overlayOn = false;
+      send('overlay-state', false);
+      applyOverlay();
+    }
+    send('interact-state', interactMode); // resync the panel
+    return;
+  }
   const alreadyInteracting = !!interactMode;
   interactMode = mode;
   if (!alreadyInteracting) {
@@ -322,9 +332,11 @@ async function doStartInteract(mode, fromHotkey) {
     overlayWindow.setAlwaysOnTop(false);
     overlayWindow.setFocusable(true);
     if (!fromHotkey) mainWindow.setAlwaysOnTop(true, 'normal');
-    if (!overlayWindow._interactCSSKey) {
-      overlayWindow._interactCSSKey = await overlayWindow.webContents.insertCSS(INTERACT_CSS);
-    }
+    try {
+      if (!overlayWindow._interactCSSKey) {
+        overlayWindow._interactCSSKey = await overlayWindow.webContents.insertCSS(INTERACT_CSS);
+      }
+    } catch (_) { /* page navigating or gone: interact without the backdrop */ }
   }
   applyOverlay();
   overlayWindow.focus();
@@ -332,7 +344,7 @@ async function doStartInteract(mode, fromHotkey) {
 }
 
 async function doStopInteract(focusPanel) {
-  if (!interactMode) return;
+  if (!interactMode) { send('interact-state', null); return; } // resync a panel that missed the change
   interactMode = null;
   overlayWindow._interacting = false;
   overlayWindow.setIgnoreMouseEvents(true);
@@ -340,13 +352,14 @@ async function doStopInteract(focusPanel) {
   overlayWindow.setFocusable(false);
   mainWindow.setAlwaysOnTop(false);
   applyOverlay();
+  // Tell the panel right away; removing the backdrop CSS can fail or stall if the page is reloading.
+  send('interact-state', null);
   if (overlayWindow._interactCSSKey) {
     const key = overlayWindow._interactCSSKey;
     overlayWindow._interactCSSKey = null;
-    await overlayWindow.webContents.removeInsertedCSS(key);
+    try { await overlayWindow.webContents.removeInsertedCSS(key); } catch (_) { /* page already gone */ }
   }
   if (focusPanel) mainWindow.focus();
-  send('interact-state', null);
 }
 
 function toggleInteract() {
