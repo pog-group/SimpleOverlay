@@ -400,6 +400,22 @@ ipcMain.on('reload-overlay', () => {
   }
 });
 
+// Like Ctrl+Shift+F5: drop the HTTP cache, service workers and Cache Storage, then reload bypassing the cache.
+// Cookies and localStorage are kept so logins survive.
+ipcMain.on('clear-cache-reload', async () => {
+  const wc = overlayWindow.webContents;
+  const url = wc.getURL();
+  try {
+    await wc.session.clearCache();
+    await wc.session.clearStorageData({ storages: ['serviceworkers', 'cachestorage', 'shadercache'] });
+    await wc.session.clearCodeCaches({});
+  } catch (_) { /* reload anyway */ }
+  if (url && url !== 'about:blank') {
+    loadFailed = false;
+    wc.reloadIgnoringCache();
+  }
+});
+
 ipcMain.on('set-target', async (_, t) => {
   if (t && t.kind === 'window' && Number.isSafeInteger(Number(t.hwnd))) {
     startFollow(Number(t.hwnd), String(t.title || 'window'), String(t.proc || ''));

@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   hideOverlay: () => ipcRenderer.send('hide-overlay'),
   setAudioMuted: (muted) => ipcRenderer.send('set-audio-muted', muted),
   reloadOverlay: () => ipcRenderer.send('reload-overlay'),
+  clearCacheReload: () => ipcRenderer.send('clear-cache-reload'),
   setUrl: (url, show = false) => ipcRenderer.invoke('set-url', { url, show }),
   setTarget: (target) => ipcRenderer.send('set-target', target),
   setPageWidth: (width) => ipcRenderer.send('set-page-width', width),
