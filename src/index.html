@@ -144,8 +144,29 @@
     .btn-toggle .sub[data-tone="idle"] { color: var(--idle); }
     .btn-toggle .sub[data-tone="warn"] { color: var(--warn); }
 
-    .check { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text); font-size: 12px; text-transform: none; letter-spacing: normal; margin-bottom: 0; }
-    .check input { accent-color: var(--accent); width: 14px; height: 14px; }
+    .checks { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+    .check {
+      position: relative; display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+      color: var(--muted); font-size: 12px; text-transform: none; letter-spacing: normal;
+      margin-bottom: 0; user-select: none; transition: color 0.15s;
+      line-height: 18px; /* even height, so the 14px box lands on whole pixels instead of blurry half pixels */
+    }
+    .check:hover, .check:has(input:checked) { color: var(--text); }
+    .check input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .check .box {
+      width: 14px; height: 14px; flex-shrink: 0; display: grid; place-items: center;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .check:hover .box { border-color: var(--accent); }
+    .check input:checked + .box { background: var(--accent); border-color: var(--accent); }
+    .check .box::after {
+      content: ''; width: 4px; height: 8px; margin-top: -2px; /* the rotated tick's weight sits low, so nudge it up */
+      border: solid #fff; border-width: 0 2px 2px 0;
+      transform: rotate(45deg) scale(0); transition: transform 0.12s;
+    }
+    .check input:checked + .box::after { transform: rotate(45deg) scale(1); }
+    .check input:focus-visible + .box { outline: 2px solid var(--accent); outline-offset: 1px; }
 
     [hidden] { display: none !important; }
 
@@ -272,10 +293,16 @@
         </select>
       </div>
     </div>
-    <label class="check" id="hideUnfocusedRow" hidden>
-      <input type="checkbox" id="hideUnfocused" />
-      Hide when that window is not focused
-    </label>
+    <div class="checks">
+      <label class="check" title="Never use the cache, so edits to your page show up on every load. Logins are kept.">
+        <input type="checkbox" id="bypassCache" /><span class="box"></span>
+        Bypass cache
+      </label>
+      <label class="check" id="hideUnfocusedRow" title="Hide the overlay while the followed window is not focused" hidden>
+        <input type="checkbox" id="hideUnfocused" /><span class="box"></span>
+        Hide when unfocused
+      </label>
+    </div>
   </div>
 
   <!-- Overlay controls -->
@@ -422,6 +449,8 @@
     refreshWinBtn.onclick = refreshWindows;
     const pageSizeSelect = $('pageSizeSelect');
     pageSizeSelect.onchange = () => window.api.setPageWidth(parseInt(pageSizeSelect.value) || 0);
+    const bypassCache = $('bypassCache');
+    bypassCache.onchange = () => window.api.setBypassCache(bypassCache.checked);
     hideUnfocused.onchange =() => window.api.setHideUnfocused(hideUnfocused.checked);
 
     // ── Library list ──
@@ -699,6 +728,7 @@
       canFollow = state.canFollow;
       target = state.target;
       hideUnfocused.checked = state.hideWhenUnfocused;
+      bypassCache.checked = state.bypassCache;
       pageSizeSelect.value = String(state.pageWidth || 0);
       refreshWinBtn.hidden = !canFollow;
       renderTargets();

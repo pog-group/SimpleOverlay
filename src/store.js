@@ -27,6 +27,7 @@ const state = {
   selectedMonitor: 0,
   hideWhenUnfocused: true,
   pageWidth: 0, // 0 = native; otherwise the width (px) the page believes the screen has
+  bypassCache: false, // load the page without ever using the cache
 };
 
 function sanitize(raw) {
@@ -41,6 +42,7 @@ function sanitize(raw) {
     selectedMonitor: Number.isInteger(raw.selectedMonitor) ? raw.selectedMonitor : 0,
     hideWhenUnfocused: raw.hideWhenUnfocused !== false,
     pageWidth: Number.isInteger(raw.pageWidth) && raw.pageWidth >= 320 && raw.pageWidth <= 7680 ? raw.pageWidth : 0,
+    bypassCache: raw.bypassCache === true,
   };
 }
 
@@ -105,6 +107,7 @@ function update(mutate) {
       disk.selectedMonitor = state.selectedMonitor;
       disk.hideWhenUnfocused = state.hideWhenUnfocused;
       disk.pageWidth = state.pageWidth;
+      disk.bypassCache = state.bypassCache;
       await writeWithRetry(JSON.stringify(disk, null, 2));
       state.saved = disk.saved;
       state.history = disk.history;

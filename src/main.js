@@ -97,6 +97,63 @@ function createOverlayWindow() {
       setLoadFailed(true);
     }
   });
+
+  // The switch lives in a debugger session that can be lost (crash, process swap), so keep it in sync.
+  const wc = overlayWindow.webContents;
+  wc.debugger.on('detach', () => {
+    bypassApplied = null;
+    if (!overlayWindow.isDestroyed()) syncBypassCache();
+  });
+  wc.on('render-process-gone', () => { bypassApplied = null; });
+  wc.on('did-start-navigation', (_, _url, _inPlace, isMainFrame) => {
+    if (isMainFrame) { bypassApplied = null; syncBypassCache(); } // re-send; cheap, and survives a process swap
+  });
+  // Debugger commands never complete on a window that has no page yet, so give it a blank one first.
+  wc.once('did-finish-load', () => syncBypassCache());
+  overlayWindow.loadURL('about:blank').catch(() => {});
+}
+
+// "Bypass cache" is the DevTools "Disable cache" switch (plus "Bypass for network" for service workers):
+// every load and fetch of the page goes to the source. Logins (cookies, localStorage) are untouched.
+// syncBypassCache makes the page match store.bypassCache; calls run one at a time, and anything that
+// loads the page awaits it first, so a load never starts before the switch is in place.
+let bypassQueue = Promise.resolve();
+let bypassApplied = null; // what the current debugger session was last told; null = unknown
+
+// A debugger command that gets no answer (e.g. mid process swap) must never freeze page loading,
+// so give up after a moment; the next navigation or toggle tries again.
+function debuggerSend(method, params) {
+  const send = overlayWindow.webContents.debugger.sendCommand(method, params);
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error(`${method} timed out`)), 2000));
+  return Promise.race([send, timeout]);
+}
+
+function syncBypassCache({ attach = false } = {}) {
+  const run = bypassQueue.then(async () => {
+    const want = !!store.bypassCache;
+    const dbg = overlayWindow.webContents.debugger;
+    if (!dbg.isAttached()) {
+      if (!want && !attach) return; // nothing to undo
+      dbg.attach('1.3');
+      bypassApplied = null;
+      await debuggerSend('Network.enable');
+    }
+    if (bypassApplied === want) return;
+    await debuggerSend('Network.setCacheDisabled', { cacheDisabled: want });
+    await debuggerSend('Network.setBypassServiceWorker', { bypass: want });
+    bypassApplied = want;
+  }).catch((err) => {
+    bypassApplied = null; // unknown, so the next sync tries again
+    console.warn('Could not change cache bypass:', err.message);
+  });
+  bypassQueue = run;
+  return run;
+}
+
+// Runs a DevTools-protocol command on the overlay page.
+async function cdp(method, params) {
+  await syncBypassCache({ attach: true });
+  return debuggerSend(method, params);
 }
 
 function createMainWindow() {
@@ -384,6 +441,7 @@ ipcMain.handle('get-state', () => ({
   target: currentTarget(),
   hideWhenUnfocused: store.hideWhenUnfocused,
   pageWidth: store.pageWidth,
+  bypassCache: store.bypassCache,
   canFollow: windows.SUPPORTED,
   canShow: hasUrl(),
   audioMuted: overlayWindow.webContents.isAudioMuted(),
@@ -414,10 +472,24 @@ ipcMain.on('clear-cache-reload', async () => {
     await wc.session.clearCache();
     await wc.session.clearStorageData({ storages: ['serviceworkers', 'cachestorage', 'shadercache'] });
     await wc.session.clearCodeCaches({});
+    await cdp('Network.clearBrowserCache'); // also drops caches the session calls above can miss
   } catch (_) { /* reload anyway */ }
   if (url && url !== 'about:blank') {
     loadFailed = false;
+    await syncBypassCache();
     wc.reloadIgnoringCache();
+  }
+});
+
+ipcMain.on('set-bypass-cache', async (_, value) => {
+  store.bypassCache = !!value;
+  storage.persist();
+  await syncBypassCache();
+  // Reload so the page already on screen is fetched with (or without) the cache, matching the checkbox.
+  const url = overlayWindow.webContents.getURL();
+  if (url && url !== 'about:blank') {
+    loadFailed = false;
+    overlayWindow.webContents.reloadIgnoringCache();
   }
 });
 
@@ -449,11 +521,12 @@ ipcMain.on('set-hide-unfocused', (_, value) => {
 });
 
 // Returns { ok, url } or { ok: false, error } so the panel can show what is wrong.
-ipcMain.handle('set-url', (_, { url, show }) => {
+ipcMain.handle('set-url', async (_, { url, show }) => {
   const result = normalizeUrl(url);
   if (!result.ok) return result;
   pendingHistoryUrl = result.url;
   loadFailed = false;
+  await syncBypassCache(); // the cache switch must be in place before the page starts loading
   overlayWindow.loadURL(result.url).catch(() => {}); // failures are reported via did-fail-load
   if (show) showOverlay();
   return result;

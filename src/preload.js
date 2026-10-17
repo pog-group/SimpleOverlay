@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('api', {
   showOverlay: () => ipcRenderer.send('show-overlay'),
   hideOverlay: () => ipcRenderer.send('hide-overlay'),
   setAudioMuted: (muted) => ipcRenderer.send('set-audio-muted', muted),
+  setBypassCache: (value) => ipcRenderer.send('set-bypass-cache', value),
   clearCacheReload: () => ipcRenderer.send('clear-cache-reload'),
   setUrl: (url, show = false) => ipcRenderer.invoke('set-url', { url, show }),
   setTarget: (target) => ipcRenderer.send('set-target', target),
