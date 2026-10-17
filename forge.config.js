@@ -1,3 +1,7 @@
+// Forge doesn't read .env by itself. Load it here (it is gitignored) so GITHUB_TOKEN reaches `publish`.
+// Variables already set in the shell win over the file.
+try { process.loadEnvFile(require('path').join(__dirname, '.env')); } catch (_) {}
+
 module.exports = {
   packagerConfig: {
     name: 'Simple Overlay',
