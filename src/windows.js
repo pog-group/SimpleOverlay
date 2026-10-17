@@ -1,154 +1,153 @@
 // Windows-only helpers: list top-level windows and watch one of them.
-// Electron cannot see other apps' windows, so a PowerShell process calls user32 for us.
-const { spawn } = require('child_process');
+// Electron cannot see other apps' windows, so we call user32/dwmapi directly through koffi
+// (a prebuilt FFI module; no helper process, no PowerShell).
+const path = require('path');
 
 const SUPPORTED = process.platform === 'win32';
 
-const NATIVE = String.raw`
-[Console]::OutputEncoding = [Text.Encoding]::UTF8
-Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-using System.Text;
-[StructLayout(LayoutKind.Sequential)] public struct WRECT { public int L, T, R, B; }
-public delegate bool EnumProc(IntPtr h, IntPtr l);
-public static class W {
-  [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr v);
-  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-  [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);
-  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
-  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
-  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out WRECT r);
-  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
-  [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr h, int i);
-  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc p, IntPtr l);
-  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
-  [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")] public static extern int DwmRect(IntPtr h, int a, out WRECT r, int s);
-  [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")] public static extern int DwmInt(IntPtr h, int a, out int v, int s);
+const WS_EX_TOOLWINDOW = 0x80;
+const WS_EX_TRANSPARENT = 0x20;     // click-through: other overlays
+const WS_EX_NOACTIVATE = 0x08000000; // never takes focus: other overlays
+const GWL_EXSTYLE = -20;
+const DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+const DWMWA_CLOAKED = 14;
+const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+const POLL_MS = 16;
+
+let native = null;
+function load() {
+  if (native) return native;
+  const koffi = require('koffi');
+  const user32 = koffi.load('user32.dll');
+  const dwmapi = koffi.load('dwmapi.dll');
+  const kernel32 = koffi.load('kernel32.dll');
+  koffi.struct('RECT', { left: 'int32', top: 'int32', right: 'int32', bottom: 'int32' });
+  const EnumProc = koffi.proto('bool EnumProc(intptr hwnd, intptr lparam)');
+  native = {
+    koffi,
+    EnumProc,
+    GetForegroundWindow: user32.func('intptr GetForegroundWindow()'),
+    IsWindow: user32.func('bool IsWindow(intptr hwnd)'),
+    IsIconic: user32.func('bool IsIconic(intptr hwnd)'),
+    IsWindowVisible: user32.func('bool IsWindowVisible(intptr hwnd)'),
+    GetWindowRect: user32.func('bool GetWindowRect(intptr hwnd, _Out_ RECT *rect)'),
+    GetWindowThreadProcessId: user32.func('uint32 GetWindowThreadProcessId(intptr hwnd, _Out_ uint32_t *pid)'),
+    GetWindowLongW: user32.func('int32 GetWindowLongW(intptr hwnd, int index)'),
+    GetWindowTextW: user32.func('int GetWindowTextW(intptr hwnd, _Out_ uint8_t *text, int max)'),
+    EnumWindows: user32.func('bool EnumWindows(EnumProc *callback, intptr lparam)'),
+    DwmRect: dwmapi.func('int DwmGetWindowAttribute(intptr hwnd, uint32 attr, _Out_ RECT *value, uint32 size)'),
+    DwmInt: dwmapi.func('int DwmGetWindowAttribute(intptr hwnd, uint32 attr, _Out_ int32_t *value, uint32 size)'),
+    OpenProcess: kernel32.func('intptr OpenProcess(uint32 access, bool inherit, uint32 pid)'),
+    CloseHandle: kernel32.func('bool CloseHandle(intptr handle)'),
+    QueryFullProcessImageNameW: kernel32.func('bool QueryFullProcessImageNameW(intptr process, uint32 flags, _Out_ uint8_t *name, _Inout_ uint32_t *size)'),
+  };
+  return native;
 }
-public static class Watch {
-  public static void Run(long target) {
-    IntPtr h = new IntPtr(target);
-    string last = "";
-    while (true) {
-      bool alive = W.IsWindow(h);
-      int min = 0; WRECT rc = new WRECT();
-      if (alive) {
-        if (W.IsIconic(h)) min = 1;
-        if (W.DwmRect(h, 9, out rc, 16) != 0) W.GetWindowRect(h, out rc);
-      }
-      IntPtr fg = W.GetForegroundWindow();
-      uint fgPid; W.GetWindowThreadProcessId(fg, out fgPid);
-      int focused = fg.ToInt64() == target ? 1 : 0;
-      string line = (alive ? 1 : 0) + "|" + min + "|" + focused + "|" + fgPid + "|" + rc.L + "|" + rc.T + "|" + rc.R + "|" + rc.B;
-      if (line != last) { Console.Out.WriteLine(line); Console.Out.Flush(); last = line; }
-      System.Threading.Thread.Sleep(8);
+
+function windowPid(n, hwnd) {
+  const pid = [0];
+  n.GetWindowThreadProcessId(hwnd, pid);
+  return pid[0];
+}
+
+const processNames = new Map(); // pid -> exe name without extension ('' if unknown)
+function processName(n, pid) {
+  if (processNames.has(pid)) return processNames.get(pid);
+  let name = '';
+  const handle = n.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+  if (handle) {
+    const buf = Buffer.alloc(1040);
+    const size = [520];
+    if (n.QueryFullProcessImageNameW(handle, 0, buf, size)) {
+      name = path.win32.basename(buf.toString('utf16le', 0, size[0] * 2), '.exe');
     }
+    n.CloseHandle(handle);
   }
-}
-'@
-[void][W]::SetProcessDpiAwarenessContext([IntPtr](-4))
-`;
-
-const LIST_SCRIPT = NATIVE + String.raw`
-$own = __OWNPID__
-$res = New-Object System.Collections.ArrayList
-$cb = [EnumProc]{
-  param($h, $l)
-  if (-not [W]::IsWindowVisible($h)) { return $true }
-  # Skip tool windows, click-through windows and non-activating windows (other overlays, including our own kind)
-  if (([W]::GetWindowLong($h, -20) -band (0x80 -bor 0x20 -bor 0x08000000)) -ne 0) { return $true }
-  $cloaked = 0
-  [void][W]::DwmInt($h, 14, [ref]$cloaked, 4)
-  if ($cloaked -ne 0) { return $true }
-  $sb = New-Object System.Text.StringBuilder 256
-  [void][W]::GetWindowText($h, $sb, 256)
-  $title = $sb.ToString()
-  if ([string]::IsNullOrWhiteSpace($title) -or $title -eq 'Program Manager') { return $true }
-  $wpid = 0
-  [void][W]::GetWindowThreadProcessId($h, [ref]$wpid)
-  if ($wpid -eq $own) { return $true }
-  $p = Get-Process -Id $wpid -ErrorAction SilentlyContinue
-  [void]$res.Add([pscustomobject]@{ hwnd = $h.ToInt64(); title = $title; proc = $p.ProcessName })
-  return $true
-}
-[void][W]::EnumWindows($cb, [IntPtr]::Zero)
-ConvertTo-Json -Compress -InputObject @($res)
-`;
-
-// One line per change: alive|minimized|focused|foregroundPid|left|top|right|bottom
-// The loop is compiled C# (not PowerShell) so it can poll every ~8 ms without lag while a window is dragged.
-const WATCH_SCRIPT = NATIVE + String.raw`
-[Watch]::Run(__HWND__)
-`;
-
-function spawnScript(script) {
-  const encoded = Buffer.from(script, 'utf16le').toString('base64');
-  return spawn(
-    'powershell.exe',
-    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
-    { windowsHide: true },
-  );
+  processNames.set(pid, name);
+  return name;
 }
 
+function windowTitle(n, hwnd) {
+  const buf = Buffer.alloc(1024);
+  const length = n.GetWindowTextW(hwnd, buf, 512);
+  return length > 0 ? buf.toString('utf16le', 0, length * 2) : '';
+}
+
+// Returns [{ hwnd, title, proc }] for windows a user would recognise as "an app window".
 function listWindows() {
-  if (!SUPPORTED) return Promise.resolve([]);
-  return new Promise((resolve) => {
-    const proc = spawnScript(LIST_SCRIPT.replace('__OWNPID__', String(process.pid)));
-    let out = '';
-    const timer = setTimeout(() => proc.kill(), 10000);
-    proc.stdout.setEncoding('utf8');
-    proc.stdout.on('data', (c) => { out += c; });
-    proc.on('error', () => { clearTimeout(timer); resolve([]); });
-    proc.on('close', () => {
-      clearTimeout(timer);
-      try {
-        const parsed = JSON.parse(out.replace(/^﻿/, '').trim() || '[]');
-        const list = (Array.isArray(parsed) ? parsed : [parsed])
-          .filter((w) => w && w.hwnd && w.title)
-          .map((w) => ({ hwnd: String(w.hwnd), title: String(w.title), proc: String(w.proc || '') }));
-        resolve(list);
-      } catch (_) {
-        resolve([]);
-      }
-    });
-  });
+  if (!SUPPORTED) return [];
+  const n = load();
+  const handles = [];
+  const callback = n.koffi.register((hwnd) => {
+    handles.push(hwnd);
+    return true;
+  }, n.koffi.pointer(n.EnumProc));
+  try {
+    n.EnumWindows(callback, 0);
+  } finally {
+    n.koffi.unregister(callback);
+  }
+
+  const result = [];
+  for (const hwnd of handles) {
+    if (!n.IsWindowVisible(hwnd)) continue;
+    if ((n.GetWindowLongW(hwnd, GWL_EXSTYLE) & (WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE)) !== 0) continue;
+    const cloaked = [0];
+    n.DwmInt(hwnd, DWMWA_CLOAKED, cloaked, 4);
+    if (cloaked[0] !== 0) continue; // belongs to another virtual desktop or is a hidden UWP frame
+    const title = windowTitle(n, hwnd);
+    if (!title.trim() || title === 'Program Manager') continue;
+    const pid = windowPid(n, hwnd);
+    if (pid === process.pid) continue;
+    result.push({ hwnd: String(hwnd), title, proc: processName(n, pid) });
+  }
+  return result;
 }
 
-// Calls onState({alive, minimized, focused, fgPid, rect:{x,y,width,height}}) on every change.
-// Returns { stop() }. onExit fires if the helper dies on its own.
+// Calls onState({alive, minimized, focused, fgPid, rect:{x,y,width,height}}) whenever something changes.
+// Returns { stop() }. onExit fires if the native calls start failing.
 function watchWindow(hwnd, onState, onExit) {
   const id = Number(hwnd);
   if (!SUPPORTED || !Number.isSafeInteger(id)) return { stop() {} };
-  const proc = spawnScript(WATCH_SCRIPT.replace('__HWND__', String(id)));
-  let stopped = false;
-  let buf = '';
-  proc.stdout.setEncoding('utf8');
-  proc.stdout.on('data', (chunk) => {
-    buf += chunk;
-    let i;
-    while ((i = buf.indexOf('\n')) >= 0) {
-      const line = buf.slice(0, i).trim();
-      buf = buf.slice(i + 1);
-      const p = line.split('|').map(Number);
-      if (p.length !== 8 || p.some(Number.isNaN)) continue;
-      onState({
-        alive: p[0] === 1,
-        minimized: p[1] === 1,
-        focused: p[2] === 1,
-        fgPid: p[3],
-        rect: { x: p[4], y: p[5], width: p[6] - p[4], height: p[7] - p[5] },
-      });
+  const n = load();
+  let last = '';
+
+  const tick = () => {
+    const alive = n.IsWindow(id);
+    let minimized = false;
+    const rect = {};
+    if (alive) {
+      minimized = n.IsIconic(id);
+      // The frame without the invisible resize borders; falls back to the plain window rectangle.
+      if (n.DwmRect(id, DWMWA_EXTENDED_FRAME_BOUNDS, rect, 16) !== 0) n.GetWindowRect(id, rect);
     }
-  });
-  proc.on('error', () => { if (!stopped) onExit(); });
-  proc.on('exit', () => { if (!stopped) onExit(); });
-  return {
-    stop() {
-      stopped = true;
-      proc.kill();
-    },
+    const fg = n.GetForegroundWindow();
+    const fgPid = fg ? windowPid(n, fg) : 0;
+    const left = rect.left || 0;
+    const top = rect.top || 0;
+    const key = [alive, minimized, fg === id, fgPid, left, top, rect.right || 0, rect.bottom || 0].join('|');
+    if (key === last) return;
+    last = key;
+    onState({
+      alive,
+      minimized,
+      focused: fg === id,
+      fgPid,
+      rect: { x: left, y: top, width: (rect.right || 0) - left, height: (rect.bottom || 0) - top },
+    });
   };
+
+  const timer = setInterval(() => {
+    try {
+      tick();
+    } catch (err) {
+      console.warn('Window tracking stopped:', err.message);
+      clearInterval(timer);
+      onExit();
+    }
+  }, POLL_MS);
+
+  return { stop: () => clearInterval(timer) };
 }
 
 module.exports = { SUPPORTED, listWindows, watchWindow };

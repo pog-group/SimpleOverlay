@@ -1,10 +1,13 @@
 const { app, BrowserWindow, Menu, ipcMain, screen, globalShortcut } = require('electron');
 const path = require('path');
-const fs = require('fs');
 const { version } = require('../package.json');
 const windows = require('./windows');
+const updater = require('./updater');
+const { normalizeUrl } = require('./url');
 
-if (require('electron-squirrel-startup')) app.quit();
+// Squirrel runs the app briefly during install/update/uninstall. Quit right away and skip all startup work.
+const isSquirrelEvent = require('electron-squirrel-startup');
+if (isSquirrelEvent) app.quit();
 
 // Pin Windows taskbar icon to this app ID so it always groups correctly
 if (process.platform === 'win32') {
@@ -18,45 +21,20 @@ function getAppIcon() {
   return path.join(base, 'icon.png');
 }
 
-const STORE_PATH = path.join(app.getPath('userData'), 'store.json');
-
-function loadStore() {
-  try {
-    if (fs.existsSync(STORE_PATH)) {
-      const data = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'));
-      // Sanitize saved entries that may be objects from a previous version
-      data.saved = (data.saved || []).map(e => typeof e === 'string' ? e : e.url).filter(Boolean);
-      if (data.hideWhenUnfocused === undefined) data.hideWhenUnfocused = true;
-      return data;
-    }
-  } catch (_) {}
-  return {
-    history: [],
-    saved: [
-      'http://overlazy.imthespyke.fr/',
-      'https://broadcast-center.imthespyke.fr/',
-    ],
-    selectedMonitor: 0,
-    hideWhenUnfocused: true,
-  };
-}
-
-function saveStore(data) {
-  fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2));
-}
-
-let store = loadStore();
+const storage = require('./store');
+const store = storage.state; // live object: saved, history, selectedMonitor, hideWhenUnfocused
 let mainWindow = null;
 let overlayWindow = null;
 
-const HISTORY_LIMIT = 30;
 const INTERACT_CSS = 'html, body { background: #3a3a3a !important; backdrop-filter: blur(12px) !important; }';
 
 // Everything the overlay's geometry and visibility is derived from.
 let overlayOn = false;
 let interactMode = null; // null | 'interact' (clicks work) | 'edit' (clicks work + fullscreen)
-let follow = null;       // { hwnd, title, watcher, alive, minimized, focused, ours, rect } while following a window
+let follow = null;       // { hwnd, title, proc, watcher, retry, alive, minimized, focused, ours, rect } while following a window
+let overlayVisible = false; // whether the overlay is actually showing right now
 let loadFailed = false;
+let pendingHistoryUrl = null; // recorded in Recent only once the page has actually loaded
 let lastBounds = '';
 let lastStatus = { tone: 'off', text: 'Overlay hidden' };
 
@@ -93,6 +71,7 @@ function createOverlayWindow() {
   overlayWindow.show();
 
   overlayWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  overlayWindow.webContents.setAudioMuted(true); // the overlay is silent unless the user turns sound on
 
   overlayWindow.webContents.on('did-finish-load', async () => {
     await overlayWindow.webContents.insertCSS('html, body { background: transparent !important; }');
@@ -101,9 +80,18 @@ function createOverlayWindow() {
     }
   });
 
-  overlayWindow.webContents.on('did-finish-load', () => setLoadFailed(false));
+  overlayWindow.webContents.on('did-finish-load', () => {
+    setLoadFailed(false);
+    if (pendingHistoryUrl) {
+      storage.addHistory(pendingHistoryUrl).then(notifyStore);
+      pendingHistoryUrl = null;
+    }
+  });
   overlayWindow.webContents.on('did-fail-load', (_, code, _desc, _url, isMainFrame) => {
-    if (isMainFrame && code !== -3) setLoadFailed(true); // -3 = aborted by a newer navigation
+    if (isMainFrame && code !== -3) { // -3 = aborted by a newer navigation
+      pendingHistoryUrl = null;
+      setLoadFailed(true);
+    }
   });
 }
 
@@ -123,7 +111,8 @@ function createMainWindow() {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
   mainWindow.on('closed', () => {
     stopFollow();
-    overlayWindow.destroy();
+    // On quit-and-install every window is closed in turn, so the overlay may already be gone.
+    if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.destroy();
     app.quit();
   });
 }
@@ -160,7 +149,7 @@ function applyOverlay() {
     const name = `“${follow.title}”`;
     const r = follow.rect;
     if (!follow.alive) {
-      status = { tone: 'warn', short: 'window closed', text: `${name} was closed. Pick another window or a display.` };
+      status = { tone: 'warn', short: 'window not found', text: `${name} is gone. Waiting for it to come back, or pick another window.` };
     } else if (follow.minimized) {
       status = { tone: 'idle', short: 'minimized', text: `Hidden. ${name} is minimized.` };
     } else if (!r) {
@@ -187,8 +176,10 @@ function applyOverlay() {
     }
   }
   overlayWindow.setOpacity(visible ? 1 : 0);
+  overlayVisible = visible;
+  status.visible = visible;
 
-  if (status.tone !== lastStatus.tone || status.text !== lastStatus.text || status.short !== lastStatus.short) {
+  if (status.tone !== lastStatus.tone || status.text !== lastStatus.text || status.short !== lastStatus.short || status.visible !== lastStatus.visible) {
     lastStatus = status;
     send('status', status);
   }
@@ -196,26 +187,47 @@ function applyOverlay() {
 
 // ── Window following ──
 function stopFollow() {
-  if (follow && follow.watcher) follow.watcher.stop();
+  if (!follow) return;
+  if (follow.watcher) follow.watcher.stop();
+  clearInterval(follow.retry);
   follow = null;
 }
 
-function startFollow(hwnd, title) {
-  stopFollow();
-  const f = { hwnd, title, watcher: null, alive: true, minimized: false, focused: false, ours: false, rect: null };
-  follow = f;
+// When the followed window disappears and a window of the same app appears (an app restart), lock back on.
+// An exact title match wins; otherwise the app must have exactly one other window.
+function findReplacement(f) {
+  if (!f.proc) return null;
+  const candidates = windows.listWindows().filter(w => w.proc === f.proc && Number(w.hwnd) !== f.hwnd);
+  return candidates.find(w => w.title === f.title) || (candidates.length === 1 ? candidates[0] : null);
+}
+
+function watchFollowed(f) {
+  if (f.watcher) f.watcher.stop();
   f.watcher = windows.watchWindow(
-    hwnd,
+    f.hwnd,
     (s) => {
       if (follow !== f) return;
       f.alive = s.alive;
       f.minimized = s.minimized;
       f.focused = s.focused;
       f.ours = s.fgPid === process.pid;
-      // The helper reports physical pixels; Electron bounds are DIPs.
+      // The tracker reports physical pixels; Electron bounds are DIPs.
       f.rect = !s.alive ? null
         : typeof screen.screenToDipRect === 'function' ? screen.screenToDipRect(null, s.rect)
         : s.rect;
+      if (s.alive) {
+        clearInterval(f.retry);
+        f.retry = null;
+      } else if (!f.retry) {
+        f.retry = setInterval(() => {
+          const match = follow === f && findReplacement(f);
+          if (!match) return;
+          f.hwnd = Number(match.hwnd);
+          f.title = match.title;
+          watchFollowed(f);
+          send('target', currentTarget());
+        }, 1000);
+      }
       applyOverlay();
     },
     () => {
@@ -224,6 +236,13 @@ function startFollow(hwnd, title) {
       applyOverlay();
     },
   );
+}
+
+function startFollow(hwnd, title, proc) {
+  stopFollow();
+  const f = { hwnd, title, proc, watcher: null, retry: null, alive: true, minimized: false, focused: false, ours: false, rect: null };
+  follow = f;
+  watchFollowed(f);
 }
 
 // ── Show / hide / interact ──
@@ -259,10 +278,24 @@ function toggleOverlay() {
   showOverlay();
 }
 
+// Start/stop run one at a time, so mashing the hotkey can't interleave two transitions
+// (that could leave the dark interact background stuck on the overlay).
+let interactQueue = Promise.resolve();
+function queueInteract(task) {
+  const run = interactQueue.then(task);
+  interactQueue = run.catch(() => {});
+  return run;
+}
+
+const startInteract = (mode, fromHotkey = false) => queueInteract(() => doStartInteract(mode, fromHotkey));
+const stopInteract = (focusPanel = true) => queueInteract(() => doStopInteract(focusPanel));
+
 // fromHotkey: the user is in another app, so don't pull the control panel in front of it.
-async function startInteract(mode, fromHotkey = false) {
+async function doStartInteract(mode, fromHotkey) {
   if (!overlayOn) showOverlay();
   if (!overlayOn) return;
+  // Clicking into an overlay you can't see is pointless; fullscreen interact still works.
+  if (mode === 'interact' && follow && !overlayVisible) return;
   const alreadyInteracting = !!interactMode;
   interactMode = mode;
   if (!alreadyInteracting) {
@@ -280,7 +313,7 @@ async function startInteract(mode, fromHotkey = false) {
   send('interact-state', interactMode);
 }
 
-async function stopInteract(focusPanel = true) {
+async function doStopInteract(focusPanel) {
   if (!interactMode) return;
   interactMode = null;
   overlayWindow._interacting = false;
@@ -299,13 +332,15 @@ async function stopInteract(focusPanel = true) {
 }
 
 function toggleInteract() {
-  return interactMode ? stopInteract(false) : startInteract('interact', true);
+  return queueInteract(() => (interactMode ? doStopInteract(false) : doStartInteract('interact', true)));
 }
 
 // ── IPC ──
+const notifyStore = () => send('store-updated', store);
+
 function currentTarget() {
   return follow
-    ? { kind: 'window', hwnd: follow.hwnd, title: follow.title }
+    ? { kind: 'window', hwnd: follow.hwnd, title: follow.title, proc: follow.proc }
     : { kind: 'display', index: store.selectedMonitor };
 }
 
@@ -319,6 +354,8 @@ ipcMain.handle('get-state', () => ({
   hideWhenUnfocused: store.hideWhenUnfocused,
   canFollow: windows.SUPPORTED,
   canShow: hasUrl(),
+  audioMuted: overlayWindow.webContents.isAudioMuted(),
+  update: updater.getUpdate(),
 }));
 
 ipcMain.handle('get-displays', () => {
@@ -331,6 +368,8 @@ ipcMain.handle('get-displays', () => {
 
 ipcMain.handle('list-windows', () => windows.listWindows());
 
+ipcMain.on('set-audio-muted', (_, muted) => overlayWindow.webContents.setAudioMuted(!!muted));
+ipcMain.on('install-update', updater.installUpdate);
 ipcMain.on('show-overlay', showOverlay);
 ipcMain.on('hide-overlay', hideOverlay);
 
@@ -344,11 +383,11 @@ ipcMain.on('reload-overlay', () => {
 
 ipcMain.on('set-target', async (_, t) => {
   if (t && t.kind === 'window' && Number.isSafeInteger(Number(t.hwnd))) {
-    startFollow(Number(t.hwnd), String(t.title || 'window'));
+    startFollow(Number(t.hwnd), String(t.title || 'window'), String(t.proc || ''));
   } else {
     stopFollow();
     store.selectedMonitor = Number(t && t.index) || 0;
-    saveStore(store);
+    storage.persist();
     // "Edit layout" only exists while following a window.
     if (interactMode === 'edit') await startInteract('interact');
   }
@@ -358,49 +397,38 @@ ipcMain.on('set-target', async (_, t) => {
 
 ipcMain.on('set-hide-unfocused', (_, value) => {
   store.hideWhenUnfocused = !!value;
-  saveStore(store);
+  storage.persist();
   applyOverlay();
 });
 
-ipcMain.on('set-url', (_, { url, show }) => {
-  store.history = [url, ...store.history.filter(u => u !== url)].slice(0, HISTORY_LIMIT);
-  saveStore(store);
-  send('store-updated', store);
+// Returns { ok, url } or { ok: false, error } so the panel can show what is wrong.
+ipcMain.handle('set-url', (_, { url, show }) => {
+  const result = normalizeUrl(url);
+  if (!result.ok) return result;
+  pendingHistoryUrl = result.url;
   loadFailed = false;
-  overlayWindow.loadURL(url).catch(() => {}); // failures are reported via did-fail-load
+  overlayWindow.loadURL(result.url).catch(() => {}); // failures are reported via did-fail-load
   if (show) showOverlay();
+  return result;
 });
 
-ipcMain.on('save-url', (_, url) => {
-  if (!store.saved.includes(url)) {
-    store.saved = [url, ...store.saved];
-    saveStore(store);
-    send('store-updated', store);
-  }
+ipcMain.handle('save-url', async (_, url) => {
+  const result = normalizeUrl(url);
+  if (result.ok) await storage.addSaved(result.url).then(notifyStore);
+  return result;
 });
 
-ipcMain.on('remove-saved', (_, url) => {
-  store.saved = store.saved.filter(u => u !== url);
-  saveStore(store);
-  send('store-updated', store);
-});
-
-ipcMain.on('remove-history', (_, url) => {
-  store.history = store.history.filter(u => u !== url);
-  saveStore(store);
-  send('store-updated', store);
-});
-
-ipcMain.on('clear-history', () => {
-  store.history = [];
-  saveStore(store);
-  send('store-updated', store);
-});
+ipcMain.on('remove-saved', (_, url) => storage.removeSaved(url).then(notifyStore));
+ipcMain.on('remove-history', (_, url) => storage.removeHistory(url).then(notifyStore));
+ipcMain.on('clear-history', () => storage.clearHistory().then(notifyStore));
 
 ipcMain.on('interact-overlay', (_, mode) => startInteract(mode === 'edit' ? 'edit' : 'interact'));
 ipcMain.on('stop-interact-overlay', () => stopInteract());
 
 app.whenReady().then(() => {
+  if (isSquirrelEvent) return;
+  storage.init(app.getPath('userData'));
+  storage.watch(notifyStore); // other running instances may change the saved list or history
   Menu.setApplicationMenu(null); // no File/Edit/... bar, not even when pressing Alt
   createOverlayWindow();
   createMainWindow();
@@ -410,6 +438,8 @@ app.whenReady().then(() => {
   };
   bind('CommandOrControl+Alt+O', toggleOverlay);
   bind('CommandOrControl+Alt+I', toggleInteract);
+  updater.startUpdateChecks(mainWindow, (u) => send('update-state', u),
+    process.env.SIMPLEOVERLAY_FAKE_UPDATE ? 1500 : 5000);
 });
 
 app.on('will-quit', () => {

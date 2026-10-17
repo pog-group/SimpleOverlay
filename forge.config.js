@@ -2,7 +2,8 @@ module.exports = {
   packagerConfig: {
     name: 'Simple Overlay',
     executableName: 'simple-overlay',
-    asar: true,
+    // Native modules (koffi) can't be loaded from inside the asar archive.
+    asar: { unpack: '**/*.node' },
     icon: './assets/icons/icon',
     ignore: (path) => {
       const allowed = [
@@ -50,6 +51,18 @@ module.exports = {
       name: '@electron-forge/maker-rpm',
       platforms: ['linux'],
       config: {},
+    },
+  ],
+  // `npm run publish:win` builds, then uploads Setup.exe, RELEASES and the .nupkg to a draft
+  // GitHub release for v<package.json version>. Needs a GITHUB_TOKEN env variable.
+  publishers: [
+    {
+      name: '@electron-forge/publisher-github',
+      config: {
+        repository: { owner: 'pog-group', name: 'SimpleOverlay' },
+        prerelease: false,
+        draft: true,
+      },
     },
   ],
 };
