@@ -461,6 +461,10 @@ ipcMain.handle('save-url', async (_, url) => {
 });
 
 ipcMain.on('remove-saved', (_, url) => storage.removeSaved(url).then(notifyStore));
+ipcMain.on('move-saved', (_, url, beforeUrl) => {
+  if (typeof url !== 'string' || (beforeUrl != null && typeof beforeUrl !== 'string')) return;
+  storage.moveSaved(url, beforeUrl).then(notifyStore);
+});
 ipcMain.on('remove-history', (_, url) => storage.removeHistory(url).then(notifyStore));
 ipcMain.on('clear-history', () => storage.clearHistory().then(notifyStore));
 

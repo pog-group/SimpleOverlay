@@ -188,6 +188,9 @@
     }
     .item:last-child { border-bottom: none; }
     .item:hover { background: #1a2540; }
+    .item.dragging { opacity: 0.4; }
+    .item.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+    .item.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
     .item.current { box-shadow: inset 3px 0 0 var(--accent); background: #18233f; }
 
     .item-url {
@@ -424,6 +427,11 @@
     hideUnfocused.onchange =() => window.api.setHideUnfocused(hideUnfocused.checked);
 
     // ── Library list ──
+    let dragUrl = null;     // favorite currently being dragged
+    let refocusUrl = null;  // keep keyboard focus on this item after a keyboard reorder re-renders the list
+    function clearDropMarks() {
+      listEl.querySelectorAll('.drop-before, .drop-after').forEach(el => el.classList.remove('drop-before', 'drop-after'));
+    }
     function makeItem(url, isSaved, removable) {
       const row = document.createElement('div');
       row.className = 'item' + (isSaved ? '' : ' is-history') + (url === currentUrl ? ' current' : '');
@@ -458,6 +466,53 @@
       }
       row.onclick = () => loadUrl(url);
       row.onkeydown = (e) => { if (e.key === 'Enter' && e.target === row) loadUrl(url); };
+
+      // Favorites can be reordered by dragging, or with Alt+Up / Alt+Down.
+      if (isSaved && tab === 'saved') {
+        row.draggable = true;
+        row.title = 'Drag to reorder (or Alt+Up / Alt+Down)';
+        row.ondragstart = (e) => {
+          dragUrl = url;
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', url);
+          row.classList.add('dragging');
+        };
+        row.ondragend = () => { dragUrl = null; clearDropMarks(); row.classList.remove('dragging'); };
+        row.ondragover = (e) => {
+          if (dragUrl === null) return;
+          e.preventDefault();
+          const after = e.offsetY > row.offsetHeight / 2;
+          clearDropMarks();
+          row.classList.add(after ? 'drop-after' : 'drop-before');
+        };
+        row.ondragleave = () => row.classList.remove('drop-before', 'drop-after');
+        row.ondrop = (e) => {
+          if (dragUrl === null) return;
+          e.preventDefault();
+          const list = store.saved || [];
+          const after = row.classList.contains('drop-after');
+          const next = after ? list[list.indexOf(url) + 1] : url;
+          const moving = dragUrl;
+          dragUrl = null;
+          clearDropMarks();
+          window.api.moveSaved(moving, next === undefined ? null : next);
+        };
+        const baseKeydown = row.onkeydown;
+        row.onkeydown = (e) => {
+          if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.target === row) {
+            e.preventDefault();
+            const list = store.saved || [];
+            const i = list.indexOf(url);
+            const to = e.key === 'ArrowUp' ? i - 1 : i + 1;
+            if (to < 0 || to >= list.length) return;
+            // moving up: in front of the previous item; moving down: in front of the one after the next
+            window.api.moveSaved(url, e.key === 'ArrowUp' ? list[to] : (list[to + 1] ?? null));
+            refocusUrl = url;
+            return;
+          }
+          baseKeydown(e);
+        };
+      }
       return row;
     }
 
@@ -487,6 +542,11 @@
         return;
       }
       items.forEach(u => listEl.appendChild(makeItem(u, savedSet.has(u), !showSaved)));
+      if (refocusUrl) {
+        const el = [...listEl.children].find(c => c.querySelector('.item-url')?.textContent === refocusUrl);
+        refocusUrl = null;
+        if (el) el.focus();
+      }
     }
 
     tabRecent.onclick = () => { tab = 'recent'; renderList(); };

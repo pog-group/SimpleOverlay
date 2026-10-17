@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('api', {
   setPageWidth: (width) => ipcRenderer.send('set-page-width', width),
   setHideUnfocused: (value) => ipcRenderer.send('set-hide-unfocused', value),
   saveUrl: (url) => ipcRenderer.invoke('save-url', url),
+  moveSaved: (url, beforeUrl) => ipcRenderer.send('move-saved', url, beforeUrl),
   removeSaved: (url) => ipcRenderer.send('remove-saved', url),
   removeHistory: (url) => ipcRenderer.send('remove-history', url),
   clearHistory: () => ipcRenderer.send('clear-history'),
