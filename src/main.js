@@ -26,7 +26,9 @@ const store = storage.state; // live object: saved, history, selectedMonitor, hi
 let mainWindow = null;
 let overlayWindow = null;
 
-const INTERACT_CSS = 'html, body { background: #3a3a3a !important; backdrop-filter: blur(12px) !important; }';
+// Background only. Never add backdrop-filter, transform, filter or the like here: on html/body they turn the
+// page into the reference frame for its position:fixed/absolute elements and shift the whole layout.
+const INTERACT_CSS = 'html, body { background: #3a3a3a !important; }';
 
 // Everything the overlay's geometry and visibility is derived from.
 let overlayOn = false;
