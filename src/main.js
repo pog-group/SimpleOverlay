@@ -73,7 +73,11 @@ function createOverlayWindow() {
   overlayWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   overlayWindow.webContents.setAudioMuted(true); // the overlay is silent unless the user turns sound on
 
+  // Zoom is kept per origin, so a navigation can reset it.
+  overlayWindow.webContents.on('dom-ready', applyPageZoom);
+  overlayWindow.webContents.on('did-navigate', applyPageZoom);
   overlayWindow.webContents.on('did-finish-load', async () => {
+    applyPageZoom();
     await overlayWindow.webContents.insertCSS('html, body { background: transparent !important; }');
     if (overlayWindow._interacting) {
       overlayWindow._interactCSSKey = await overlayWindow.webContents.insertCSS(INTERACT_CSS);
@@ -129,6 +133,18 @@ function setOverlayBounds(b) {
   if (got.x !== want.x || got.y !== want.y || got.width !== want.width || got.height !== want.height) {
     overlayWindow.setBounds(want);
   }
+  applyPageZoom();
+}
+
+// Makes the page believe the overlay is `pageWidth` px wide (e.g. 1920 on a 2560 screen) by zooming it,
+// so layouts built for one resolution line up on another. 0 = native size.
+function applyPageZoom() {
+  if (!overlayWindow || overlayWindow.isDestroyed()) return;
+  const width = overlayWindow.getContentSize()[0];
+  const zoom = store.pageWidth && width > 0 ? width / store.pageWidth : 1;
+  if (Math.abs(overlayWindow.webContents.getZoomFactor() - zoom) > 0.001) {
+    overlayWindow.webContents.setZoomFactor(zoom);
+  }
 }
 
 // Single place that decides where the overlay is and whether it can be seen.
@@ -156,7 +172,8 @@ function applyOverlay() {
       status = { tone: 'idle', short: 'searching…', text: `Looking for ${name}…` };
     } else if (r.width <= 0 || r.height <= 0) {
       status = { tone: 'idle', short: 'no visible area', text: `Hidden. ${name} has no visible area.` };
-    } else if (store.hideWhenUnfocused && !follow.focused && !follow.ours) {
+    } else if (store.hideWhenUnfocused && !follow.focused && !interactMode) {
+      // Only the followed window counts as focus; our own panel doesn't (the overlay itself does while interacting).
       status = { tone: 'idle', short: 'not focused', text: `Hidden. ${name} is not focused.` };
     } else {
       bounds = r;
@@ -352,6 +369,7 @@ ipcMain.handle('get-state', () => ({
   status: lastStatus,
   target: currentTarget(),
   hideWhenUnfocused: store.hideWhenUnfocused,
+  pageWidth: store.pageWidth,
   canFollow: windows.SUPPORTED,
   canShow: hasUrl(),
   audioMuted: overlayWindow.webContents.isAudioMuted(),
@@ -393,6 +411,13 @@ ipcMain.on('set-target', async (_, t) => {
   }
   lastBounds = '';
   applyOverlay();
+});
+
+ipcMain.on('set-page-width', (_, width) => {
+  const w = Number(width);
+  store.pageWidth = Number.isInteger(w) && w >= 320 && w <= 7680 ? w : 0;
+  storage.persist();
+  applyPageZoom();
 });
 
 ipcMain.on('set-hide-unfocused', (_, value) => {

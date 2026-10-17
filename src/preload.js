@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   reloadOverlay: () => ipcRenderer.send('reload-overlay'),
   setUrl: (url, show = false) => ipcRenderer.invoke('set-url', { url, show }),
   setTarget: (target) => ipcRenderer.send('set-target', target),
+  setPageWidth: (width) => ipcRenderer.send('set-page-width', width),
   setHideUnfocused: (value) => ipcRenderer.send('set-hide-unfocused', value),
   saveUrl: (url) => ipcRenderer.invoke('save-url', url),
   removeSaved: (url) => ipcRenderer.send('remove-saved', url),
