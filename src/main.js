@@ -392,14 +392,6 @@ ipcMain.on('install-update', updater.installUpdate);
 ipcMain.on('show-overlay', showOverlay);
 ipcMain.on('hide-overlay', hideOverlay);
 
-ipcMain.on('reload-overlay', () => {
-  const url = overlayWindow.webContents.getURL();
-  if (url && url !== 'about:blank') {
-    loadFailed = false;
-    overlayWindow.loadURL(url).catch(() => {});
-  }
-});
-
 // Like Ctrl+Shift+F5: drop the HTTP cache, service workers and Cache Storage, then reload bypassing the cache.
 // Cookies and localStorage are kept so logins survive.
 ipcMain.on('clear-cache-reload', async () => {

@@ -282,8 +282,7 @@
   <!-- Overlay controls -->
   <div class="row">
     <button class="btn-toggle" id="toggleBtn" style="flex:3">Show Overlay</button>
-    <button class="btn-ghost" id="reloadBtn" style="flex:1" title="Reload the page">↺ Reload</button>
-    <button class="btn-ghost" id="hardReloadBtn" title="Clear the cache and reload (Ctrl+Shift+F5)" aria-label="Clear cache and reload">🧹</button>
+    <button class="btn-ghost" id="reloadBtn" style="flex:1" title="Clear the cache and reload the page (like Ctrl+Shift+F5)">↺ Reload</button>
     <button class="btn-ghost" id="soundBtn" aria-pressed="false"></button>
   </div>
 
@@ -615,9 +614,7 @@
       const canShow = pageReady && urlInput.value.trim() !== '';
       const blocked = !canShow && !overlayOn;
       toggleBtn.disabled = blocked;
-      $('reloadBtn').disabled = !pageReady; // nothing to reload until a page has loaded
-      $('hardReloadBtn').disabled = !pageReady;
-      interactBtn.disabled = blocked;
+      $('reloadBtn').disabled = !pageReady; // nothing to reload until a page has loaded      interactBtn.disabled = blocked;
       editBtn.disabled = blocked;
       if (blocked) {
         const why = !urlInput.value.trim() ? 'Enter a URL first'
@@ -671,8 +668,7 @@
     updateBtn.onclick = () => window.api.installUpdate();
 
     toggleBtn.onclick = () => overlayOn ? window.api.hideOverlay() : window.api.showOverlay();
-    $('reloadBtn').onclick = () => window.api.reloadOverlay();
-    $('hardReloadBtn').onclick = () => window.api.clearCacheReload();
+    $('reloadBtn').onclick = () => window.api.clearCacheReload();
 
     // The overlay page is silent by default; this lets its audio through.
     const soundBtn = $('soundBtn');
