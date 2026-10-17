@@ -567,7 +567,9 @@
       }
       // Following a window that isn't showing: plain Interact would click an invisible overlay.
       // (Interact in fullscreen still works, and a running Interact can always be stopped.)
-      const followHidden = target.kind === 'window' && overlayOn && !status.visible && interactMode !== 'interact';
+      // Hidden only because the window isn't focused is fine: Interact forces the overlay visible.
+      const followHidden = target.kind === 'window' && overlayOn && !status.visible && interactMode !== 'interact'
+        && status.short !== 'not focused';
       if (followHidden) {
         interactBtn.disabled = true;
         interactBtn.title = 'The followed window is not visible, so there is nothing to click. Use Interact in fullscreen.';

@@ -312,7 +312,8 @@ async function doStartInteract(mode, fromHotkey) {
   if (!overlayOn) showOverlay();
   if (!overlayOn) return;
   // Clicking into an overlay you can't see is pointless; fullscreen interact still works.
-  if (mode === 'interact' && follow && !overlayVisible) return;
+  // Hidden only because the followed window lost focus doesn't count: interacting forces it visible.
+  if (mode === 'interact' && follow && !overlayVisible && lastStatus.short !== 'not focused') return;
   const alreadyInteracting = !!interactMode;
   interactMode = mode;
   if (!alreadyInteracting) {
