@@ -248,10 +248,26 @@
 
   <!-- Target: a display or a window to follow -->
   <div class="section">
-    <label for="targetSelect">Show on</label>
-    <div class="row">
-      <select id="targetSelect"></select>
-      <button class="btn-ghost" id="refreshWinBtn" title="Refresh window list" aria-label="Refresh window list" hidden>↻</button>
+    <div class="row" style="align-items:flex-end">
+      <div style="flex:1; min-width:0">
+        <label for="targetSelect">Show on</label>
+        <div class="row">
+          <select id="targetSelect"></select>
+          <button class="btn-ghost" id="refreshWinBtn" title="Refresh window list" aria-label="Refresh window list" hidden>↻</button>
+        </div>
+      </div>
+      <!-- Page resolution: the page thinks the screen is this size -->
+      <div style="width:110px; flex-shrink:0">
+        <label for="pageSizeSelect">Page resolution</label>
+        <select id="pageSizeSelect" title="The page lays itself out as if the overlay were this size, then is scaled to fit">
+          <option value="0">Native</option>
+          <option value="1920">1920x1080</option>
+          <option value="2560">2560x1440</option>
+          <option value="1600">1600x900</option>
+          <option value="1366">1366x768</option>
+          <option value="1280">1280x720</option>
+        </select>
+      </div>
     </div>
     <label class="check" id="hideUnfocusedRow" hidden>
       <input type="checkbox" id="hideUnfocused" />
@@ -401,7 +417,9 @@
     };
 
     refreshWinBtn.onclick = refreshWindows;
-    hideUnfocused.onchange = () => window.api.setHideUnfocused(hideUnfocused.checked);
+    const pageSizeSelect = $('pageSizeSelect');
+    pageSizeSelect.onchange = () => window.api.setPageWidth(parseInt(pageSizeSelect.value) || 0);
+    hideUnfocused.onchange =() => window.api.setHideUnfocused(hideUnfocused.checked);
 
     // ── Library list ──
     function makeItem(url, isSaved, removable) {
@@ -619,6 +637,7 @@
       canFollow = state.canFollow;
       target = state.target;
       hideUnfocused.checked = state.hideWhenUnfocused;
+      pageSizeSelect.value = String(state.pageWidth || 0);
       refreshWinBtn.hidden = !canFollow;
       renderTargets();
       renderList();

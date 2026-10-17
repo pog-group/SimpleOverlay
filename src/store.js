@@ -26,6 +26,7 @@ const state = {
   saved: DEFAULT_SAVED.slice(),
   selectedMonitor: 0,
   hideWhenUnfocused: true,
+  pageWidth: 0, // 0 = native; otherwise the width (px) the page believes the screen has
 };
 
 function sanitize(raw) {
@@ -39,6 +40,7 @@ function sanitize(raw) {
     saved: Array.isArray(raw.saved) ? strings(raw.saved) : DEFAULT_SAVED.slice(),
     selectedMonitor: Number.isInteger(raw.selectedMonitor) ? raw.selectedMonitor : 0,
     hideWhenUnfocused: raw.hideWhenUnfocused !== false,
+    pageWidth: Number.isInteger(raw.pageWidth) && raw.pageWidth >= 320 && raw.pageWidth <= 7680 ? raw.pageWidth : 0,
   };
 }
 
@@ -102,6 +104,7 @@ function update(mutate) {
       mutate(disk);
       disk.selectedMonitor = state.selectedMonitor;
       disk.hideWhenUnfocused = state.hideWhenUnfocused;
+      disk.pageWidth = state.pageWidth;
       await writeWithRetry(JSON.stringify(disk, null, 2));
       state.saved = disk.saved;
       state.history = disk.history;
