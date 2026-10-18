@@ -26,7 +26,9 @@ const store = storage.state; // live object: saved, history, selectedMonitor, hi
 let mainWindow = null;
 let overlayWindow = null;
 
-const INTERACT_CSS = 'html, body { background: #3a3a3a !important; backdrop-filter: blur(12px) !important; }';
+// Background only. Never add backdrop-filter, transform, filter or the like here: on html/body they turn the
+// page into the reference frame for its position:fixed/absolute elements and shift the whole layout.
+const INTERACT_CSS = 'html, body { background: #3a3a3a !important; }';
 
 // Everything the overlay's geometry and visibility is derived from.
 let overlayOn = false;
@@ -97,6 +99,63 @@ function createOverlayWindow() {
       setLoadFailed(true);
     }
   });
+
+  // The switch lives in a debugger session that can be lost (crash, process swap), so keep it in sync.
+  const wc = overlayWindow.webContents;
+  wc.debugger.on('detach', () => {
+    bypassApplied = null;
+    if (!overlayWindow.isDestroyed()) syncBypassCache();
+  });
+  wc.on('render-process-gone', () => { bypassApplied = null; });
+  wc.on('did-start-navigation', (_, _url, _inPlace, isMainFrame) => {
+    if (isMainFrame) { bypassApplied = null; syncBypassCache(); } // re-send; cheap, and survives a process swap
+  });
+  // Debugger commands never complete on a window that has no page yet, so give it a blank one first.
+  wc.once('did-finish-load', () => syncBypassCache());
+  overlayWindow.loadURL('about:blank').catch(() => {});
+}
+
+// "Bypass cache" is the DevTools "Disable cache" switch (plus "Bypass for network" for service workers):
+// every load and fetch of the page goes to the source. Logins (cookies, localStorage) are untouched.
+// syncBypassCache makes the page match store.bypassCache; calls run one at a time, and anything that
+// loads the page awaits it first, so a load never starts before the switch is in place.
+let bypassQueue = Promise.resolve();
+let bypassApplied = null; // what the current debugger session was last told; null = unknown
+
+// A debugger command that gets no answer (e.g. mid process swap) must never freeze page loading,
+// so give up after a moment; the next navigation or toggle tries again.
+function debuggerSend(method, params) {
+  const send = overlayWindow.webContents.debugger.sendCommand(method, params);
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error(`${method} timed out`)), 2000));
+  return Promise.race([send, timeout]);
+}
+
+function syncBypassCache({ attach = false } = {}) {
+  const run = bypassQueue.then(async () => {
+    const want = !!store.bypassCache;
+    const dbg = overlayWindow.webContents.debugger;
+    if (!dbg.isAttached()) {
+      if (!want && !attach) return; // nothing to undo
+      dbg.attach('1.3');
+      bypassApplied = null;
+      await debuggerSend('Network.enable');
+    }
+    if (bypassApplied === want) return;
+    await debuggerSend('Network.setCacheDisabled', { cacheDisabled: want });
+    await debuggerSend('Network.setBypassServiceWorker', { bypass: want });
+    bypassApplied = want;
+  }).catch((err) => {
+    bypassApplied = null; // unknown, so the next sync tries again
+    console.warn('Could not change cache bypass:', err.message);
+  });
+  bypassQueue = run;
+  return run;
+}
+
+// Runs a DevTools-protocol command on the overlay page.
+async function cdp(method, params) {
+  await syncBypassCache({ attach: true });
+  return debuggerSend(method, params);
 }
 
 function createMainWindow() {
@@ -309,10 +368,21 @@ const stopInteract = (focusPanel = true) => queueInteract(() => doStopInteract(f
 
 // fromHotkey: the user is in another app, so don't pull the control panel in front of it.
 async function doStartInteract(mode, fromHotkey) {
+  const wasOn = overlayOn;
   if (!overlayOn) showOverlay();
-  if (!overlayOn) return;
+  if (!overlayOn) { send('interact-state', interactMode); return; }
   // Clicking into an overlay you can't see is pointless; fullscreen interact still works.
-  if (mode === 'interact' && follow && !overlayVisible) return;
+  // Hidden only because the followed window lost focus doesn't count: interacting forces it visible.
+  if (mode === 'interact' && follow && !overlayVisible && lastStatus.short !== 'not focused') {
+    // Interact was what turned the overlay on, so undo that instead of leaving it on and unusable.
+    if (!wasOn) {
+      overlayOn = false;
+      send('overlay-state', false);
+      applyOverlay();
+    }
+    send('interact-state', interactMode); // resync the panel
+    return;
+  }
   const alreadyInteracting = !!interactMode;
   interactMode = mode;
   if (!alreadyInteracting) {
@@ -321,9 +391,11 @@ async function doStartInteract(mode, fromHotkey) {
     overlayWindow.setAlwaysOnTop(false);
     overlayWindow.setFocusable(true);
     if (!fromHotkey) mainWindow.setAlwaysOnTop(true, 'normal');
-    if (!overlayWindow._interactCSSKey) {
-      overlayWindow._interactCSSKey = await overlayWindow.webContents.insertCSS(INTERACT_CSS);
-    }
+    try {
+      if (!overlayWindow._interactCSSKey) {
+        overlayWindow._interactCSSKey = await overlayWindow.webContents.insertCSS(INTERACT_CSS);
+      }
+    } catch (_) { /* page navigating or gone: interact without the backdrop */ }
   }
   applyOverlay();
   overlayWindow.focus();
@@ -331,7 +403,7 @@ async function doStartInteract(mode, fromHotkey) {
 }
 
 async function doStopInteract(focusPanel) {
-  if (!interactMode) return;
+  if (!interactMode) { send('interact-state', null); return; } // resync a panel that missed the change
   interactMode = null;
   overlayWindow._interacting = false;
   overlayWindow.setIgnoreMouseEvents(true);
@@ -339,13 +411,14 @@ async function doStopInteract(focusPanel) {
   overlayWindow.setFocusable(false);
   mainWindow.setAlwaysOnTop(false);
   applyOverlay();
+  // Tell the panel right away; removing the backdrop CSS can fail or stall if the page is reloading.
+  send('interact-state', null);
   if (overlayWindow._interactCSSKey) {
     const key = overlayWindow._interactCSSKey;
     overlayWindow._interactCSSKey = null;
-    await overlayWindow.webContents.removeInsertedCSS(key);
+    try { await overlayWindow.webContents.removeInsertedCSS(key); } catch (_) { /* page already gone */ }
   }
   if (focusPanel) mainWindow.focus();
-  send('interact-state', null);
 }
 
 function toggleInteract() {
@@ -370,6 +443,7 @@ ipcMain.handle('get-state', () => ({
   target: currentTarget(),
   hideWhenUnfocused: store.hideWhenUnfocused,
   pageWidth: store.pageWidth,
+  bypassCache: store.bypassCache,
   canFollow: windows.SUPPORTED,
   canShow: hasUrl(),
   audioMuted: overlayWindow.webContents.isAudioMuted(),
@@ -391,11 +465,33 @@ ipcMain.on('install-update', updater.installUpdate);
 ipcMain.on('show-overlay', showOverlay);
 ipcMain.on('hide-overlay', hideOverlay);
 
-ipcMain.on('reload-overlay', () => {
+// Like Ctrl+Shift+F5: drop the HTTP cache, service workers and Cache Storage, then reload bypassing the cache.
+// Cookies and localStorage are kept so logins survive.
+ipcMain.on('clear-cache-reload', async () => {
+  const wc = overlayWindow.webContents;
+  const url = wc.getURL();
+  try {
+    await wc.session.clearCache();
+    await wc.session.clearStorageData({ storages: ['serviceworkers', 'cachestorage', 'shadercache'] });
+    await wc.session.clearCodeCaches({});
+    await cdp('Network.clearBrowserCache'); // also drops caches the session calls above can miss
+  } catch (_) { /* reload anyway */ }
+  if (url && url !== 'about:blank') {
+    loadFailed = false;
+    await syncBypassCache();
+    wc.reloadIgnoringCache();
+  }
+});
+
+ipcMain.on('set-bypass-cache', async (_, value) => {
+  store.bypassCache = !!value;
+  storage.persist();
+  await syncBypassCache();
+  // Reload so the page already on screen is fetched with (or without) the cache, matching the checkbox.
   const url = overlayWindow.webContents.getURL();
   if (url && url !== 'about:blank') {
     loadFailed = false;
-    overlayWindow.loadURL(url).catch(() => {});
+    overlayWindow.webContents.reloadIgnoringCache();
   }
 });
 
@@ -427,11 +523,12 @@ ipcMain.on('set-hide-unfocused', (_, value) => {
 });
 
 // Returns { ok, url } or { ok: false, error } so the panel can show what is wrong.
-ipcMain.handle('set-url', (_, { url, show }) => {
+ipcMain.handle('set-url', async (_, { url, show }) => {
   const result = normalizeUrl(url);
   if (!result.ok) return result;
   pendingHistoryUrl = result.url;
   loadFailed = false;
+  await syncBypassCache(); // the cache switch must be in place before the page starts loading
   overlayWindow.loadURL(result.url).catch(() => {}); // failures are reported via did-fail-load
   if (show) showOverlay();
   return result;
@@ -444,6 +541,10 @@ ipcMain.handle('save-url', async (_, url) => {
 });
 
 ipcMain.on('remove-saved', (_, url) => storage.removeSaved(url).then(notifyStore));
+ipcMain.on('move-saved', (_, url, beforeUrl) => {
+  if (typeof url !== 'string' || (beforeUrl != null && typeof beforeUrl !== 'string')) return;
+  storage.moveSaved(url, beforeUrl).then(notifyStore);
+});
 ipcMain.on('remove-history', (_, url) => storage.removeHistory(url).then(notifyStore));
 ipcMain.on('clear-history', () => storage.clearHistory().then(notifyStore));
 

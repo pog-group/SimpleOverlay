@@ -144,8 +144,29 @@
     .btn-toggle .sub[data-tone="idle"] { color: var(--idle); }
     .btn-toggle .sub[data-tone="warn"] { color: var(--warn); }
 
-    .check { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text); font-size: 12px; text-transform: none; letter-spacing: normal; margin-bottom: 0; }
-    .check input { accent-color: var(--accent); width: 14px; height: 14px; }
+    .checks { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+    .check {
+      position: relative; display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+      color: var(--muted); font-size: 12px; text-transform: none; letter-spacing: normal;
+      margin-bottom: 0; user-select: none; transition: color 0.15s;
+      line-height: 18px; /* even height, so the 14px box lands on whole pixels instead of blurry half pixels */
+    }
+    .check:hover, .check:has(input:checked) { color: var(--text); }
+    .check input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .check .box {
+      width: 14px; height: 14px; flex-shrink: 0; display: grid; place-items: center;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .check:hover .box { border-color: var(--accent); }
+    .check input:checked + .box { background: var(--accent); border-color: var(--accent); }
+    .check .box::after {
+      content: ''; width: 4px; height: 8px; margin-top: -2px; /* the rotated tick's weight sits low, so nudge it up */
+      border: solid #fff; border-width: 0 2px 2px 0;
+      transform: rotate(45deg) scale(0); transition: transform 0.12s;
+    }
+    .check input:checked + .box::after { transform: rotate(45deg) scale(1); }
+    .check input:focus-visible + .box { outline: 2px solid var(--accent); outline-offset: 1px; }
 
     [hidden] { display: none !important; }
 
@@ -188,6 +209,9 @@
     }
     .item:last-child { border-bottom: none; }
     .item:hover { background: #1a2540; }
+    .item.dragging { opacity: 0.4; }
+    .item.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+    .item.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
     .item.current { box-shadow: inset 3px 0 0 var(--accent); background: #18233f; }
 
     .item-url {
@@ -223,9 +247,8 @@
     .star.on { color: var(--star); }
 
     .field-error { color: var(--warn); font-size: 12px; }
+    .notice { flex-shrink: 0; color: var(--faint); font-size: 11px; text-align: center; }
 
-    .footer { flex-shrink: 0; font-size: 11px; color: var(--faint); text-align: center; }
-    .footer kbd { margin-left: 2px; margin-right: 4px; }
   </style>
 </head>
 <body>
@@ -261,29 +284,36 @@
         <label for="pageSizeSelect">Page resolution</label>
         <select id="pageSizeSelect" title="The page lays itself out as if the overlay were this size, then is scaled to fit">
           <option value="0">Native</option>
-          <option value="1920">1920x1080</option>
-          <option value="2560">2560x1440</option>
+          <option value="1920">1920x1080 (Full HD)</option>
+          <option value="3840">3840x2160 (4K)</option>
+          <option value="2560">2560x1440 (2K)</option>
           <option value="1600">1600x900</option>
           <option value="1366">1366x768</option>
           <option value="1280">1280x720</option>
         </select>
       </div>
     </div>
-    <label class="check" id="hideUnfocusedRow" hidden>
-      <input type="checkbox" id="hideUnfocused" />
-      Hide when that window is not focused
-    </label>
+    <div class="checks">
+      <label class="check" title="Never use the cache, so edits to your page show up on every load. Logins are kept.">
+        <input type="checkbox" id="bypassCache" /><span class="box"></span>
+        Bypass cache
+      </label>
+      <label class="check" id="hideUnfocusedRow" title="Hide the overlay while the followed window is not focused" hidden>
+        <input type="checkbox" id="hideUnfocused" /><span class="box"></span>
+        Hide when unfocused
+      </label>
+    </div>
   </div>
 
   <!-- Overlay controls -->
   <div class="row">
     <button class="btn-toggle" id="toggleBtn" style="flex:3">Show Overlay</button>
-    <button class="btn-ghost" id="reloadBtn" style="flex:1" title="Reload the page">↺ Reload</button>
+    <button class="btn-ghost" id="reloadBtn" style="flex:1" title="Clear the cache and reload the page (like Ctrl+Shift+F5)">↺ Reload</button>
     <button class="btn-ghost" id="soundBtn" aria-pressed="false"></button>
   </div>
 
   <div class="row">
-    <button class="btn-mode" id="interactBtn" title="Click and type in the overlay page">Interact</button>
+    <button class="btn-mode" id="interactBtn" title="Click and type in the overlay page">Interact<kbd>Ctrl+Alt+I</kbd></button>
     <button class="btn-mode" id="editBtn" title="Interact with the overlay in fullscreen, then snap back onto the window" hidden>Interact in fullscreen</button>
   </div>
 
@@ -299,7 +329,7 @@
     <div class="list-box" id="list"></div>
   </div>
 
-  <div class="footer"><kbd>Ctrl+Alt+O</kbd>show/hide<kbd>Ctrl+Alt+I</kbd>interact</div>
+  <div class="notice" title="Made for simple overlay pages. Loading any page, especially a regular website, carries security risks. You are responsible for what you load.">⚠ Only load pages you trust. You are responsible for what you load.</div>
 
   <script>
     const $ = (id) => document.getElementById(id);
@@ -419,9 +449,16 @@
     refreshWinBtn.onclick = refreshWindows;
     const pageSizeSelect = $('pageSizeSelect');
     pageSizeSelect.onchange = () => window.api.setPageWidth(parseInt(pageSizeSelect.value) || 0);
+    const bypassCache = $('bypassCache');
+    bypassCache.onchange = () => window.api.setBypassCache(bypassCache.checked);
     hideUnfocused.onchange =() => window.api.setHideUnfocused(hideUnfocused.checked);
 
     // ── Library list ──
+    let dragUrl = null;     // favorite currently being dragged
+    let refocusUrl = null;  // keep keyboard focus on this item after a keyboard reorder re-renders the list
+    function clearDropMarks() {
+      listEl.querySelectorAll('.drop-before, .drop-after').forEach(el => el.classList.remove('drop-before', 'drop-after'));
+    }
     function makeItem(url, isSaved, removable) {
       const row = document.createElement('div');
       row.className = 'item' + (isSaved ? '' : ' is-history') + (url === currentUrl ? ' current' : '');
@@ -456,6 +493,53 @@
       }
       row.onclick = () => loadUrl(url);
       row.onkeydown = (e) => { if (e.key === 'Enter' && e.target === row) loadUrl(url); };
+
+      // Favorites can be reordered by dragging, or with Alt+Up / Alt+Down.
+      if (isSaved && tab === 'saved') {
+        row.draggable = true;
+        row.title = 'Drag to reorder (or Alt+Up / Alt+Down)';
+        row.ondragstart = (e) => {
+          dragUrl = url;
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', url);
+          row.classList.add('dragging');
+        };
+        row.ondragend = () => { dragUrl = null; clearDropMarks(); row.classList.remove('dragging'); };
+        row.ondragover = (e) => {
+          if (dragUrl === null) return;
+          e.preventDefault();
+          const after = e.offsetY > row.offsetHeight / 2;
+          clearDropMarks();
+          row.classList.add(after ? 'drop-after' : 'drop-before');
+        };
+        row.ondragleave = () => row.classList.remove('drop-before', 'drop-after');
+        row.ondrop = (e) => {
+          if (dragUrl === null) return;
+          e.preventDefault();
+          const list = store.saved || [];
+          const after = row.classList.contains('drop-after');
+          const next = after ? list[list.indexOf(url) + 1] : url;
+          const moving = dragUrl;
+          dragUrl = null;
+          clearDropMarks();
+          window.api.moveSaved(moving, next === undefined ? null : next);
+        };
+        const baseKeydown = row.onkeydown;
+        row.onkeydown = (e) => {
+          if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.target === row) {
+            e.preventDefault();
+            const list = store.saved || [];
+            const i = list.indexOf(url);
+            const to = e.key === 'ArrowUp' ? i - 1 : i + 1;
+            if (to < 0 || to >= list.length) return;
+            // moving up: in front of the previous item; moving down: in front of the one after the next
+            window.api.moveSaved(url, e.key === 'ArrowUp' ? list[to] : (list[to + 1] ?? null));
+            refocusUrl = url;
+            return;
+          }
+          baseKeydown(e);
+        };
+      }
       return row;
     }
 
@@ -485,6 +569,11 @@
         return;
       }
       items.forEach(u => listEl.appendChild(makeItem(u, savedSet.has(u), !showSaved)));
+      if (refocusUrl) {
+        const el = [...listEl.children].find(c => c.querySelector('.item-url')?.textContent === refocusUrl);
+        refocusUrl = null;
+        if (el) el.focus();
+      }
     }
 
     tabRecent.onclick = () => { tab = 'recent'; renderList(); };
@@ -566,7 +655,9 @@
       }
       // Following a window that isn't showing: plain Interact would click an invisible overlay.
       // (Interact in fullscreen still works, and a running Interact can always be stopped.)
-      const followHidden = target.kind === 'window' && overlayOn && !status.visible && interactMode !== 'interact';
+      // Hidden only because the window isn't focused is fine: Interact forces the overlay visible.
+      const followHidden = target.kind === 'window' && overlayOn && !status.visible && interactMode !== 'interact'
+        && status.short !== 'not focused';
       if (followHidden) {
         interactBtn.disabled = true;
         interactBtn.title = 'The followed window is not visible, so there is nothing to click. Use Interact in fullscreen.';
@@ -580,7 +671,7 @@
 
     function setInteractState(mode) {
       interactMode = mode;
-      interactBtn.textContent = mode === 'interact' ? 'Stop Interacting' : 'Interact';
+      interactBtn.innerHTML = (mode === 'interact' ? 'Stop Interacting' : 'Interact') + '<kbd>Ctrl+Alt+I</kbd>';
       interactBtn.classList.toggle('active', mode === 'interact');
       editBtn.textContent = mode === 'edit' ? 'Stop Interacting' : 'Interact in fullscreen';
       editBtn.classList.toggle('active', mode === 'edit');
@@ -606,7 +697,7 @@
     updateBtn.onclick = () => window.api.installUpdate();
 
     toggleBtn.onclick = () => overlayOn ? window.api.hideOverlay() : window.api.showOverlay();
-    $('reloadBtn').onclick = () => window.api.reloadOverlay();
+    $('reloadBtn').onclick = () => window.api.clearCacheReload();
 
     // The overlay page is silent by default; this lets its audio through.
     const soundBtn = $('soundBtn');
@@ -637,6 +728,7 @@
       canFollow = state.canFollow;
       target = state.target;
       hideUnfocused.checked = state.hideWhenUnfocused;
+      bypassCache.checked = state.bypassCache;
       pageSizeSelect.value = String(state.pageWidth || 0);
       refreshWinBtn.hidden = !canFollow;
       renderTargets();

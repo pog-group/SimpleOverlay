@@ -27,6 +27,7 @@ const state = {
   selectedMonitor: 0,
   hideWhenUnfocused: true,
   pageWidth: 0, // 0 = native; otherwise the width (px) the page believes the screen has
+  bypassCache: false, // load the page without ever using the cache
 };
 
 function sanitize(raw) {
@@ -41,6 +42,7 @@ function sanitize(raw) {
     selectedMonitor: Number.isInteger(raw.selectedMonitor) ? raw.selectedMonitor : 0,
     hideWhenUnfocused: raw.hideWhenUnfocused !== false,
     pageWidth: Number.isInteger(raw.pageWidth) && raw.pageWidth >= 320 && raw.pageWidth <= 7680 ? raw.pageWidth : 0,
+    bypassCache: raw.bypassCache === true,
   };
 }
 
@@ -105,6 +107,7 @@ function update(mutate) {
       disk.selectedMonitor = state.selectedMonitor;
       disk.hideWhenUnfocused = state.hideWhenUnfocused;
       disk.pageWidth = state.pageWidth;
+      disk.bypassCache = state.bypassCache;
       await writeWithRetry(JSON.stringify(disk, null, 2));
       state.saved = disk.saved;
       state.history = disk.history;
@@ -131,6 +134,15 @@ const removeHistory = (url) => update((d) => { d.history = d.history.filter((u) 
 const clearHistory = () => update((d) => { d.history = []; });
 const addSaved = (url) => update((d) => { if (!d.saved.includes(url)) d.saved = [url, ...d.saved]; });
 const removeSaved = (url) => update((d) => { d.saved = d.saved.filter((u) => u !== url); });
+// Moves `url` in front of `beforeUrl` (null = to the end). Works on URLs, not indexes, so a list
+// another instance changed meanwhile still ends up sensible.
+const moveSaved = (url, beforeUrl) => update((d) => {
+  if (!d.saved.includes(url) || url === beforeUrl) return;
+  const rest = d.saved.filter((u) => u !== url);
+  const at = beforeUrl == null ? -1 : rest.indexOf(beforeUrl);
+  if (at === -1) rest.push(url); else rest.splice(at, 0, url);
+  d.saved = rest;
+});
 
 // Calls onChange(state) when another instance changed the saved list or history.
 function watch(onChange) {
@@ -158,4 +170,4 @@ function watch(onChange) {
   } catch (_) {}
 }
 
-module.exports = { state, init, persist, addHistory, removeHistory, clearHistory, addSaved, removeSaved, watch };
+module.exports = { state, init, persist, addHistory, removeHistory, clearHistory, addSaved, removeSaved, moveSaved, watch };
