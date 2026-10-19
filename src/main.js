@@ -26,9 +26,10 @@ const store = storage.state; // live object: saved, history, selectedMonitor, hi
 let mainWindow = null;
 let overlayWindow = null;
 
-// Background only. Never add backdrop-filter, transform, filter or the like here: on html/body they turn the
+// Background colour only (not the `background` shorthand, which would also wipe the page's background-image).
+// Never add backdrop-filter, transform, filter or the like here: on html/body they turn the
 // page into the reference frame for its position:fixed/absolute elements and shift the whole layout.
-const INTERACT_CSS = 'html, body { background: #3a3a3a !important; }';
+const INTERACT_CSS = 'html, body { background-color: #3a3a3a !important; }';
 
 // Everything the overlay's geometry and visibility is derived from.
 let overlayOn = false;
@@ -80,7 +81,7 @@ function createOverlayWindow() {
   overlayWindow.webContents.on('did-navigate', applyPageZoom);
   overlayWindow.webContents.on('did-finish-load', async () => {
     applyPageZoom();
-    await overlayWindow.webContents.insertCSS('html, body { background: transparent !important; }');
+    await overlayWindow.webContents.insertCSS('html, body { background-color: transparent !important; }');
     if (overlayWindow._interacting) {
       overlayWindow._interactCSSKey = await overlayWindow.webContents.insertCSS(INTERACT_CSS);
     }
