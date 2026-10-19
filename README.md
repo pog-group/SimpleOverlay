@@ -6,6 +6,7 @@ This app is particularly useful for Esport observers who want to display the act
 
 ![Image of app](./docs/app.png)
 
+Example usage: https://www.youtube.com/watch?v=2JcqCMfgjYc
 ## Features
 
 * Display a website in a transparent overlay on top of any monitor
