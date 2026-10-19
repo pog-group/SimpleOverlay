@@ -1,7 +1,7 @@
 {
   "name": "simple-overlay",
   "productName": "Simple Overlay",
-  "version": "27.3.0",
+  "version": "27.3.1",
   "description": "A fullscreen transparent overlay that displays a selected URL",
   "main": "src/main.js",
   "scripts": {
